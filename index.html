@@ -1206,7 +1206,7 @@
                         return driveFolder;
                     }
                 } catch (verifyError) {
-                    console.log('Known folder ID not accessible, searching by name...', verifyError);
+                    console.log('Known folder ID verification failed, will search by name:', verifyError);
                 }
                 
                 // Fallback: Look for the existing folder by name
@@ -1256,81 +1256,86 @@
                     throw new Error('Folder ID is missing');
                 }
                 
+                if (!accessToken) {
+                    throw new Error('Access token is missing - please sign in again');
+                }
+                
                 const timestamp = new Date().getTime();
                 const fileName = 'Receipt_' + fuelDate + '_' + timestamp + '.jpg';
                 
-                // Read file as array buffer
-                const fileContent = await file.arrayBuffer();
-                
-                // Step 1: Create file metadata using Drive API
+                // Step 1: Create file with metadata using fetch
                 const metadata = {
                     name: fileName,
                     parents: [folderId]
                 };
                 
-                // Step 2: Upload file using resumable upload (more reliable)
-                // First, get upload URL
-                const createResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id', {
+                console.log('Creating file with metadata:', metadata);
+                
+                const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Bearer ' + accessToken,
-                        'Content-Type': 'application/json; charset=UTF-8',
-                        'X-Upload-Content-Type': file.type || 'image/jpeg',
-                        'X-Upload-Content-Length': file.size.toString()
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(metadata)
                 });
                 
                 if (!createResponse.ok) {
                     const errorText = await createResponse.text();
-                    console.error('Failed to initiate upload:', createResponse.status, errorText);
-                    throw new Error('Failed to initiate upload: ' + createResponse.status);
+                    console.error('Failed to create file:', createResponse.status, errorText);
+                    throw new Error('Failed to create file: ' + createResponse.status + ' - ' + errorText);
                 }
                 
-                const uploadUrl = createResponse.headers.get('Location');
-                if (!uploadUrl) {
-                    throw new Error('No upload URL returned from Drive API');
+                const createResult = await createResponse.json();
+                const fileId = createResult.id;
+                
+                if (!fileId) {
+                    throw new Error('Failed to create file - no ID returned');
                 }
                 
-                console.log('Got upload URL, uploading file content...');
+                console.log('File created with ID:', fileId);
                 
-                // Step 3: Upload the file content
-                const uploadResponse = await fetch(uploadUrl, {
-                    method: 'PUT',
+                // Step 2: Upload file content
+                const fileContent = await file.arrayBuffer();
+                console.log('Uploading file content, size:', fileContent.byteLength, 'bytes');
+                
+                const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
+                    method: 'PATCH',
                     headers: {
-                        'Content-Type': file.type || 'image/jpeg',
-                        'Content-Length': file.size.toString()
+                        'Authorization': 'Bearer ' + accessToken,
+                        'Content-Type': file.type || 'image/jpeg'
                     },
                     body: fileContent
                 });
                 
                 if (!uploadResponse.ok) {
                     const errorText = await uploadResponse.text();
-                    console.error('File upload failed:', uploadResponse.status, errorText);
-                    throw new Error('Failed to upload file: ' + uploadResponse.status);
+                    console.error('File content upload failed:', uploadResponse.status, errorText);
+                    throw new Error('Failed to upload file content: ' + uploadResponse.status + ' - ' + errorText);
                 }
                 
-                const result = await uploadResponse.json();
-                
-                if (!result || !result.id) {
-                    console.error('Upload response missing file ID:', result);
-                    throw new Error('Upload succeeded but no file ID returned');
-                }
-                
-                const fileId = result.id;
+                const uploadResult = await uploadResponse.json();
                 console.log('Receipt uploaded successfully to Drive folder:', folderId, 'File ID:', fileId);
                 
-                // Make the file publicly viewable (anyone with link can view)
+                // Step 3: Make the file publicly viewable (anyone with link can view)
                 try {
-                    await gapi.client.request({
-                        path: '/drive/v3/files/' + fileId + '/permissions',
+                    const permResponse = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions', {
                         method: 'POST',
-                        body: {
+                        headers: {
+                            'Authorization': 'Bearer ' + accessToken,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
                             role: 'reader',
                             type: 'anyone'
-                        }
+                        })
                     });
-                    console.log('Receipt file set to public (anyone with link)');
+                    
+                    if (permResponse.ok) {
+                        console.log('Receipt file set to public (anyone with link)');
+                    } else {
+                        console.warn('Could not set file permissions, but file is uploaded');
+                    }
                 } catch (permError) {
                     console.error('Error setting file permissions:', permError);
                     // Don't throw - file is uploaded, just permissions failed
@@ -1341,6 +1346,10 @@
                 
             } catch (error) {
                 console.error('Error uploading receipt:', error);
+                console.error('Error details:', error.message);
+                if (error.stack) {
+                    console.error('Error stack:', error.stack);
+                }
                 throw error;
             }
         }
@@ -1416,18 +1425,27 @@
             
             if (receiptFile) {
                 try {
+                    if (!accessToken) {
+                        throw new Error('Not authenticated. Please sign in again.');
+                    }
+                    
                     showStatus('Uploading receipt image...', 'info');
+                    console.log('Starting receipt upload, file size:', receiptFile.size, 'bytes, type:', receiptFile.type);
+                    
                     receiptFileId = await uploadReceiptToDrive(receiptFile, dateValue);
+                    
                     if (receiptFileId) {
                         console.log('Receipt uploaded successfully, file ID:', receiptFileId);
-                        showStatus('Receipt uploaded successfully', 'success');
+                        showStatus('Receipt uploaded successfully!', 'success');
                     } else {
                         console.warn('Receipt upload returned no file ID');
                         showStatus('Warning: Receipt upload may have failed', 'error');
                     }
                 } catch (error) {
                     console.error('Receipt upload failed:', error);
-                    showStatus('Warning: Receipt upload failed: ' + (error.message || 'Unknown error') + '. Continuing to save data...', 'error');
+                    console.error('Error stack:', error.stack);
+                    const errorMsg = error.message || 'Unknown error';
+                    showStatus('Receipt upload failed: ' + errorMsg + '. Data will still be saved.', 'error');
                     receiptFileId = null; // Ensure it's null on error
                 }
             }
