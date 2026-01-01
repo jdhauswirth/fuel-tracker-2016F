@@ -1186,8 +1186,30 @@
         async function getOrCreateDriveFolder() {
             if (driveFolder) return driveFolder;
             
+            // Known folder ID for "Fuel Receipts 2016 Subaru Forester"
+            const knownFolderId = '1jvLRIy_C59i5vS47GAO7gxPZ3J8JzEa5';
+            
             try {
-                // Look for the existing folder by name
+                // First, try to verify the known folder exists and is accessible
+                try {
+                    const verifyResponse = await gapi.client.request({
+                        path: '/drive/v3/files/' + knownFolderId,
+                        method: 'GET',
+                        params: {
+                            fields: 'id, name, mimeType'
+                        }
+                    });
+                    
+                    if (verifyResponse.result && verifyResponse.result.mimeType === 'application/vnd.google-apps.folder') {
+                        driveFolder = knownFolderId;
+                        console.log('Using known Fuel Receipts 2016 Subaru Forester folder:', driveFolder);
+                        return driveFolder;
+                    }
+                } catch (verifyError) {
+                    console.log('Known folder ID not accessible, searching by name...', verifyError);
+                }
+                
+                // Fallback: Look for the existing folder by name
                 const response = await gapi.client.request({
                     path: '/drive/v3/files',
                     method: 'GET',
@@ -1199,7 +1221,7 @@
                 
                 if (response.result.files && response.result.files.length > 0) {
                     driveFolder = response.result.files[0].id;
-                    console.log('Found existing Fuel Receipts 2016 Subaru Forester folder:', driveFolder);
+                    console.log('Found existing Fuel Receipts 2016 Subaru Forester folder by name:', driveFolder);
                     return driveFolder;
                 }
                 
@@ -1250,9 +1272,21 @@
                     body: formData
                 });
                 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Upload failed:', response.status, errorText);
+                    throw new Error('Failed to upload receipt: ' + response.status + ' ' + response.statusText);
+                }
+                
                 const result = await response.json();
+                
+                if (!result || !result.id) {
+                    console.error('Upload response missing file ID:', result);
+                    throw new Error('Upload succeeded but no file ID returned');
+                }
+                
                 const fileId = result.id;
-                console.log('Receipt uploaded to Drive:', fileId);
+                console.log('Receipt uploaded to Drive folder:', folderId, 'File ID:', fileId);
                 
                 // Make the file publicly viewable (anyone with link can view)
                 try {
@@ -1267,7 +1301,8 @@
                     console.log('Receipt file set to public (anyone with link)');
                 } catch (permError) {
                     console.error('Error setting file permissions:', permError);
-                    showStatus('Warning: Receipt uploaded but may not be viewable', 'error');
+                    // Don't throw - file is uploaded, just permissions failed
+                    console.warn('File uploaded but permissions may not be set correctly');
                 }
                 
                 return fileId;
@@ -1351,9 +1386,17 @@
                 try {
                     showStatus('Uploading receipt image...', 'info');
                     receiptFileId = await uploadReceiptToDrive(receiptFile, dateValue);
+                    if (receiptFileId) {
+                        console.log('Receipt uploaded successfully, file ID:', receiptFileId);
+                        showStatus('Receipt uploaded successfully', 'success');
+                    } else {
+                        console.warn('Receipt upload returned no file ID');
+                        showStatus('Warning: Receipt upload may have failed', 'error');
+                    }
                 } catch (error) {
                     console.error('Receipt upload failed:', error);
-                    showStatus('Warning: Receipt upload failed, but continuing to save data', 'error');
+                    showStatus('Warning: Receipt upload failed: ' + (error.message || 'Unknown error') + '. Continuing to save data...', 'error');
+                    receiptFileId = null; // Ensure it's null on error
                 }
             }
             
@@ -1473,10 +1516,13 @@
             ];
             
             if (data.receiptFileId) {
+                console.log('Saving receipt file ID to column S, row', nextRow + ':', data.receiptFileId);
                 batchData.push({
                     range: sheetName + '!S' + nextRow,
                     values: [[data.receiptFileId]]
                 });
+            } else {
+                console.log('No receipt file ID to save');
             }
             
             const batchResponse = await gapi.client.sheets.spreadsheets.values.batchUpdate({
