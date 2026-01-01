@@ -1249,8 +1249,9 @@
             if (!file) return null;
             
             try {
+                console.log('=== FUEL TRACKER: Starting Receipt Upload ===');
                 const folderId = await getOrCreateDriveFolder();
-                console.log('Uploading to folder ID:', folderId);
+                console.log('=== FUEL TRACKER: Uploading to folder ID:', folderId, '===');
                 
                 if (!folderId) {
                     throw new Error('Folder ID is missing');
@@ -1269,7 +1270,7 @@
                     parents: [folderId]
                 };
                 
-                console.log('Creating file with metadata:', metadata);
+                console.log('=== FUEL TRACKER: Creating file with metadata:', JSON.stringify(metadata), '===');
                 
                 const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
                     method: 'POST',
@@ -1282,7 +1283,9 @@
                 
                 if (!createResponse.ok) {
                     const errorText = await createResponse.text();
-                    console.error('Failed to create file:', createResponse.status, errorText);
+                    console.error('=== FUEL TRACKER: Failed to create file ===');
+                    console.error('Status:', createResponse.status);
+                    console.error('Error:', errorText);
                     throw new Error('Failed to create file: ' + createResponse.status + ' - ' + errorText);
                 }
                 
@@ -1290,14 +1293,16 @@
                 const fileId = createResult.id;
                 
                 if (!fileId) {
+                    console.error('=== FUEL TRACKER: No file ID in response ===');
+                    console.error('Response:', createResult);
                     throw new Error('Failed to create file - no ID returned');
                 }
                 
-                console.log('File created with ID:', fileId);
+                console.log('=== FUEL TRACKER: File created with ID:', fileId, '===');
                 
                 // Step 2: Upload file content
                 const fileContent = await file.arrayBuffer();
-                console.log('Uploading file content, size:', fileContent.byteLength, 'bytes');
+                console.log('=== FUEL TRACKER: Uploading file content, size:', fileContent.byteLength, 'bytes ===');
                 
                 const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
                     method: 'PATCH',
@@ -1310,12 +1315,17 @@
                 
                 if (!uploadResponse.ok) {
                     const errorText = await uploadResponse.text();
-                    console.error('File content upload failed:', uploadResponse.status, errorText);
+                    console.error('=== FUEL TRACKER: File content upload failed ===');
+                    console.error('Status:', uploadResponse.status);
+                    console.error('Error:', errorText);
                     throw new Error('Failed to upload file content: ' + uploadResponse.status + ' - ' + errorText);
                 }
                 
                 const uploadResult = await uploadResponse.json();
-                console.log('Receipt uploaded successfully to Drive folder:', folderId, 'File ID:', fileId);
+                console.log('=== FUEL TRACKER: Receipt uploaded successfully! ===');
+                console.log('Folder ID:', folderId);
+                console.log('File ID:', fileId);
+                console.log('=== END UPLOAD SUCCESS ===');
                 
                 // Step 3: Make the file publicly viewable (anyone with link can view)
                 try {
@@ -1345,11 +1355,13 @@
                 return fileId;
                 
             } catch (error) {
-                console.error('Error uploading receipt:', error);
-                console.error('Error details:', error.message);
+                console.error('=== FUEL TRACKER: UPLOAD ERROR ===');
+                console.error('Error message:', error.message);
+                console.error('Full error:', error);
                 if (error.stack) {
                     console.error('Error stack:', error.stack);
                 }
+                console.error('=== END UPLOAD ERROR ===');
                 throw error;
             }
         }
@@ -1442,10 +1454,16 @@
                         showStatus('Warning: Receipt upload may have failed', 'error');
                     }
                 } catch (error) {
-                    console.error('Receipt upload failed:', error);
-                    console.error('Error stack:', error.stack);
+                    console.error('=== RECEIPT UPLOAD ERROR ===');
+                    console.error('Error message:', error.message);
+                    console.error('Error details:', error);
+                    if (error.stack) {
+                        console.error('Error stack:', error.stack);
+                    }
+                    console.error('=== END ERROR ===');
+                    
                     const errorMsg = error.message || 'Unknown error';
-                    showStatus('Receipt upload failed: ' + errorMsg + '. Data will still be saved.', 'error');
+                    showStatus('❌ Receipt upload failed: ' + errorMsg + '. Check console (F12) for details. Data will still be saved.', 'error');
                     receiptFileId = null; // Ensure it's null on error
                 }
             }
