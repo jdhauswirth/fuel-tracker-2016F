@@ -873,17 +873,17 @@
                 const spreadsheetId = localStorage.getItem('fuelTracker_spreadsheetId');
                 const sheetName = localStorage.getItem('fuelTracker_sheetName');
                 
-                // Read from U2:U19
+                // Read from V2:V18
                 const response = await gapi.client.sheets.spreadsheets.values.get({
                     spreadsheetId: spreadsheetId,
-                    range: sheetName + '!U2:U19',
+                    range: sheetName + '!V2:V18',
                 });
                 
                 const values = response.result.values;
                 const summaryContent = document.getElementById('summaryContent');
                 
-                if (!values || values.length < 18) {
-                    summaryContent.innerHTML = '<p style="text-align: center; color: #999;">Summary data not available. Make sure cells U2-U19 contain data.</p>';
+                if (!values || values.length < 17) {
+                    summaryContent.innerHTML = '<p style="text-align: center; color: #999;">Summary data not available. Make sure cells V2-V18 contain data.</p>';
                     showStatus('Summary data not found', 'error');
                     return;
                 }
@@ -905,8 +905,7 @@
                     totalDaysOwned: values[13] ? values[13][0] : 'N/A',
                     yearsOwned: values[14] ? values[14][0] : 'N/A',
                     totalLifetimeCost: values[15] ? values[15][0] : 'N/A',
-                    totalLifetimeCostPerMile: values[16] ? values[16][0] : 'N/A',
-                    gallonCapacity: values[17] ? values[17][0] : 'N/A'
+                    totalLifetimeCostPerMile: values[16] ? values[16][0] : 'N/A'
                 };
                 
                 let html = '';
@@ -956,10 +955,6 @@
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Highest MPG per Tank Fillup</div>';
                 html += '<div class="summary-stat-value">' + formatNumber(stats.highestMPG, 1) + '</div>';
-                html += '</div>';
-                html += '<div class="summary-stat">';
-                html += '<div class="summary-stat-label">Gallon Capacity - Fuel Tank</div>';
-                html += '<div class="summary-stat-value">' + formatNumber(stats.gallonCapacity, 1) + '</div>';
                 html += '</div>';
                 html += '</div>';
                 
@@ -1159,32 +1154,34 @@
             if (driveFolder) return driveFolder;
             
             try {
+                // Look for the existing folder by name
                 const response = await gapi.client.request({
                     path: '/drive/v3/files',
                     method: 'GET',
                     params: {
-                        q: "name='Fuel Receipts' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+                        q: "name='Fuel Receipts 2016 Subaru Forester' and mimeType='application/vnd.google-apps.folder' and trashed=false",
                         fields: 'files(id, name)'
                     }
                 });
                 
                 if (response.result.files && response.result.files.length > 0) {
                     driveFolder = response.result.files[0].id;
-                    console.log('Found existing Fuel Receipts folder:', driveFolder);
+                    console.log('Found existing Fuel Receipts 2016 Subaru Forester folder:', driveFolder);
                     return driveFolder;
                 }
                 
+                // If folder doesn't exist, create it
                 const createResponse = await gapi.client.request({
                     path: '/drive/v3/files',
                     method: 'POST',
                     body: {
-                        name: 'Fuel Receipts',
+                        name: 'Fuel Receipts 2016 Subaru Forester',
                         mimeType: 'application/vnd.google-apps.folder'
                     }
                 });
                 
                 driveFolder = createResponse.result.id;
-                console.log('Created new Fuel Receipts folder:', driveFolder);
+                console.log('Created new Fuel Receipts 2016 Subaru Forester folder:', driveFolder);
                 return driveFolder;
                 
             } catch (error) {
@@ -1484,4 +1481,3 @@
 </body>
 </html>
 
-    
