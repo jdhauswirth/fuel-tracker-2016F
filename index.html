@@ -148,9 +148,20 @@
             transition: border-color 0.3s;
         }
         
+        input[type="file"] {
+            cursor: pointer;
+            padding: 12px;
+            background: white;
+        }
+        
         input:focus, select:focus {
             outline: none;
             border-color: #45A0C9;
+        }
+        
+        input[type="file"]:focus {
+            border-color: #45A0C9;
+            box-shadow: 0 0 0 3px rgba(69, 160, 201, 0.1);
         }
         
         .calculated {
@@ -481,8 +492,8 @@
                     
                     <div class="form-group">
                         <label for="receipt">📷 Receipt Image (optional)</label>
-                        <input type="file" id="receipt" accept="image/*" capture="environment" style="padding: 8px;">
-                        <p class="info-text">Choose from gallery or take a new photo</p>
+                        <input type="file" id="receipt" accept="image/*" style="padding: 8px;">
+                        <p class="info-text">Tap to choose from gallery or take a new photo</p>
                         <div id="receiptPreview" style="margin-top: 10px;"></div>
                     </div>
                     
@@ -1089,13 +1100,35 @@
             const preview = document.getElementById('receiptPreview');
             
             if (file) {
+                // Validate file type
+                if (!file.type.match('image.*')) {
+                    showStatus('Please select an image file', 'error');
+                    e.target.value = ''; // Clear the input
+                    preview.innerHTML = '';
+                    return;
+                }
+                
+                // Validate file size (max 10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    showStatus('Image file is too large. Please use an image smaller than 10MB', 'error');
+                    e.target.value = ''; // Clear the input
+                    preview.innerHTML = '';
+                    return;
+                }
+                
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     const img = document.createElement('img');
                     img.src = event.target.result;
                     img.alt = 'Receipt Preview';
+                    img.style.maxWidth = '100%';
+                    img.style.height = 'auto';
                     preview.innerHTML = '';
                     preview.appendChild(img);
+                };
+                reader.onerror = function() {
+                    showStatus('Error reading image file', 'error');
+                    preview.innerHTML = '';
                 };
                 reader.readAsDataURL(file);
             } else {
