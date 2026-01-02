@@ -629,7 +629,10 @@
             </div>
             
             <div id="historyTab" class="tab-content">
-                <button onclick="loadHistory()" style="margin-bottom: 20px;">🔄 Refresh History</button>
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button onclick="loadHistory()">🔄 Refresh History</button>
+                    <button onclick="formatAllRows()" style="background: linear-gradient(135deg, #5FA8D0 0%, #45A0C9 100%);">📐 Format All Rows</button>
+                </div>
                 <div id="historyList" class="history-list">
                     <p style="text-align: center; color: #999;">Click "Refresh History" to load your fuel stops</p>
                 </div>
@@ -1947,7 +1950,280 @@
                 }
             });
             
+            // Apply formatting to the new row
+            await applyCellFormatting(spreadsheetId, sheetId, nextRow - 1, nextRow);
+            
             return batchResponse;
+        }
+        
+        async function formatAllRows() {
+            showStatus('Formatting all rows...', 'info');
+            try {
+                const spreadsheetId = localStorage.getItem('fuelTracker_spreadsheetId');
+                const sheetName = localStorage.getItem('fuelTracker_sheetName');
+                
+                if (!spreadsheetId || !sheetName) {
+                    showStatus('Please configure spreadsheet settings first', 'error');
+                    return;
+                }
+                
+                const sheetMetadata = await gapi.client.sheets.spreadsheets.get({
+                    spreadsheetId: spreadsheetId
+                });
+                
+                let sheetId = 0;
+                for (let i = 0; i < sheetMetadata.result.sheets.length; i++) {
+                    const sheet = sheetMetadata.result.sheets[i];
+                    if (sheet.properties.title === sheetName) {
+                        sheetId = sheet.properties.sheetId;
+                        break;
+                    }
+                }
+                
+                // Get all data rows (skip header rows 0 and 1, so start from row 2)
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: sheetName + '!B:S',
+                });
+                
+                const values = response.result.values;
+                const dataRows = values ? values.filter(function(row, index) {
+                    if (index === 0 || index === 1) return false;
+                    return row && row.length >= 2 && row[0] && String(row[0]).trim() !== '';
+                }) : [];
+                
+                if (dataRows.length === 0) {
+                    showStatus('No data rows found to format', 'info');
+                    return;
+                }
+                
+                // Format from row 2 (index 1) to the last data row
+                const startRowIndex = 1; // Row 2 (0-indexed)
+                const endRowIndex = 1 + dataRows.length; // Last data row
+                
+                await applyCellFormatting(spreadsheetId, sheetId, startRowIndex, endRowIndex);
+                showStatus('All rows formatted successfully! (' + dataRows.length + ' rows)', 'success');
+            } catch (err) {
+                console.error('Error formatting rows:', err);
+                showStatus('Error formatting rows: ' + (err.message || 'Unknown error'), 'error');
+            }
+        }
+        
+        async function applyCellFormatting(spreadsheetId, sheetId, startRowIndex, endRowIndex) {
+            // Column indices (0-based): A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8, J=9, ..., N=13, O=14
+            const requests = [];
+            
+            // Column B (Date) - Left justified
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 1, // Column B
+                        endColumnIndex: 2
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            horizontalAlignment: 'LEFT'
+                        }
+                    },
+                    fields: 'userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column C (Odometer) - 1 decimal, comma for thousands
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 2, // Column C
+                        endColumnIndex: 3
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            numberFormat: {
+                                type: 'NUMBER',
+                                pattern: '#,##0.0'
+                            },
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column D (Miles/Fill) - 1 decimal
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 3, // Column D
+                        endColumnIndex: 4
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            numberFormat: {
+                                type: 'NUMBER',
+                                pattern: '0.0'
+                            },
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column E (Gallons) - 3 decimals
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 4, // Column E
+                        endColumnIndex: 5
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            numberFormat: {
+                                type: 'NUMBER',
+                                pattern: '0.000'
+                            },
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column F (MPG) - 2 decimals
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 5, // Column F
+                        endColumnIndex: 6
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            numberFormat: {
+                                type: 'NUMBER',
+                                pattern: '0.00'
+                            },
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column G ($/Gal) - $ sign and 3 decimals
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 6, // Column G
+                        endColumnIndex: 7
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            numberFormat: {
+                                type: 'CURRENCY',
+                                pattern: '$0.000'
+                            },
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column H (Fill $) - $ sign and 2 decimals
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 7, // Column H
+                        endColumnIndex: 8
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            numberFormat: {
+                                type: 'CURRENCY',
+                                pattern: '$#,##0.00'
+                            },
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column N (Miles/Day) - 2 decimals
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 13, // Column N
+                        endColumnIndex: 14
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            numberFormat: {
+                                type: 'NUMBER',
+                                pattern: '0.00'
+                            },
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column O (AvgLast3MPG) - 1 decimal
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 14, // Column O
+                        endColumnIndex: 15
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            numberFormat: {
+                                type: 'NUMBER',
+                                pattern: '0.0'
+                            },
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            if (requests.length > 0) {
+                await gapi.client.sheets.spreadsheets.batchUpdate({
+                    spreadsheetId: spreadsheetId,
+                    resource: {
+                        requests: requests
+                    }
+                });
+            }
         }
         
         window.addEventListener('load', function() {
