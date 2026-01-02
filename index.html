@@ -550,7 +550,10 @@
         let gisInited = false;
         let driveFolder = null;
         
-        const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
+        const DISCOVERY_DOCS = [
+            'https://sheets.googleapis.com/$discovery/rest?version=v4',
+            'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
+        ];
         const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
         
         const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
@@ -659,7 +662,7 @@
             
             await gapi.client.init({
                 apiKey: apiKey,
-                discoveryDocs: [DISCOVERY_DOC],
+                discoveryDocs: DISCOVERY_DOCS,
             });
             gapiInited = true;
         }
@@ -1319,84 +1322,59 @@
                 showStatus('Getting Drive folder...', 'info');
                 console.log('=== FUEL TRACKER: Starting Receipt Upload ===');
                 
-                let folderId;
-                try {
-                    folderId = await getOrCreateDriveFolder();
-                } catch (folderError) {
-                    console.error('=== FUEL TRACKER: Error getting folder ===');
-                    console.error('Folder error:', folderError);
-                    throw new Error('Failed to get Drive folder: ' + (folderError.message || folderError));
-                }
-                
-                console.log('=== FUEL TRACKER: Uploading to folder ID:', folderId, '===');
+                // Get folder ID
+                const folderId = await getOrCreateDriveFolder();
+                console.log('=== FUEL TRACKER: Using folder ID:', folderId, '===');
                 
                 if (!folderId) {
-                    throw new Error('Folder ID is missing - folder function returned null/undefined');
+                    throw new Error('Folder ID is missing');
                 }
-                
-                if (!accessToken) {
-                    throw new Error('Access token is missing - please sign in again');
-                }
-                
-                showStatus('Creating file in Drive...', 'info');
                 
                 const timestamp = new Date().getTime();
                 const fileName = 'Receipt_' + fuelDate + '_' + timestamp + '.jpg';
                 
-                // Step 1: Create file with metadata using fetch
-                const metadata = {
-                    name: fileName,
-                    parents: [folderId]
-                };
+                showStatus('Creating file in Drive...', 'info');
                 
-                console.log('=== FUEL TRACKER: Creating file with metadata:', JSON.stringify(metadata), '===');
-                
-                const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+                // Step 1: Create empty file with metadata using gapi.client
+                const createResponse = await gapi.client.request({
+                    path: '/drive/v3/files',
                     method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + accessToken,
-                        'Content-Type': 'application/json'
+                    body: {
+                        name: fileName,
+                        parents: [folderId]
                     },
-                    body: JSON.stringify(metadata)
+                    params: {
+                        fields: 'id'
+                    }
                 });
                 
-                if (!createResponse.ok) {
-                    const errorText = await createResponse.text();
+                if (!createResponse || !createResponse.result || !createResponse.result.id) {
                     console.error('=== FUEL TRACKER: Failed to create file ===');
-                    console.error('Status:', createResponse.status);
-                    console.error('Error:', errorText);
-                    throw new Error('Failed to create file: ' + createResponse.status + ' - ' + errorText);
+                    console.error('Response:', createResponse);
+                    throw new Error('Failed to create file - no ID returned');
                 }
                 
-                let createResult;
-                try {
-                    createResult = await createResponse.json();
-                } catch (jsonError) {
-                    const responseText = await createResponse.text();
-                    console.error('=== FUEL TRACKER: Failed to parse JSON response ===');
-                    console.error('Response text:', responseText);
-                    throw new Error('Failed to parse server response: ' + jsonError.message + '. Response: ' + responseText.substring(0, 200));
-                }
-                
-                const fileId = createResult.id;
-                
-                if (!fileId) {
-                    console.error('=== FUEL TRACKER: No file ID in response ===');
-                    console.error('Full response:', JSON.stringify(createResult));
-                    throw new Error('Failed to create file - no ID returned. Response: ' + JSON.stringify(createResult));
-                }
-                
+                const fileId = createResponse.result.id;
                 console.log('=== FUEL TRACKER: File created with ID:', fileId, '===');
-                showStatus('File created. Uploading image content...', 'info');
                 
-                // Step 2: Upload file content
+                showStatus('Uploading image content...', 'info');
+                
+                // Step 2: Upload file content using fetch with access token
                 const fileContent = await file.arrayBuffer();
-                console.log('=== FUEL TRACKER: Uploading file content, size:', fileContent.byteLength, 'bytes ===');
+                console.log('=== FUEL TRACKER: Uploading', fileContent.byteLength, 'bytes ===');
+                
+                // Get fresh access token from gapi
+                const token = gapi.client.getToken();
+                const currentAccessToken = token ? token.access_token : accessToken;
+                
+                if (!currentAccessToken) {
+                    throw new Error('No access token available');
+                }
                 
                 const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
                     method: 'PATCH',
                     headers: {
-                        'Authorization': 'Bearer ' + accessToken,
+                        'Authorization': 'Bearer ' + currentAccessToken,
                         'Content-Type': file.type || 'image/jpeg'
                     },
                     body: fileContent
@@ -1404,77 +1382,47 @@
                 
                 if (!uploadResponse.ok) {
                     const errorText = await uploadResponse.text();
-                    console.error('=== FUEL TRACKER: File content upload failed ===');
+                    console.error('=== FUEL TRACKER: Upload failed ===');
                     console.error('Status:', uploadResponse.status);
                     console.error('Error:', errorText);
-                    throw new Error('Failed to upload file content: ' + uploadResponse.status + ' - ' + errorText);
+                    throw new Error('Upload failed: ' + uploadResponse.status + ' - ' + errorText);
                 }
                 
-                let uploadResult;
+                console.log('=== FUEL TRACKER: Upload successful! File ID:', fileId, '===');
+                
+                // Step 3: Set permissions (optional, don't fail if this fails)
                 try {
-                    uploadResult = await uploadResponse.json();
-                } catch (jsonError) {
-                    // If JSON parsing fails, the upload might still have succeeded
-                    // The file ID we already have should be valid
-                    console.warn('=== FUEL TRACKER: Could not parse upload response JSON, but upload may have succeeded ===');
-                    console.warn('Using file ID from creation step:', fileId);
-                }
-                
-                console.log('=== FUEL TRACKER: Receipt uploaded successfully! ===');
-                console.log('Folder ID:', folderId);
-                console.log('File ID:', fileId);
-                if (uploadResult) {
-                    console.log('Upload result:', uploadResult);
-                }
-                console.log('=== END UPLOAD SUCCESS ===');
-                
-                // Step 3: Make the file publicly viewable (anyone with link can view)
-                try {
-                    const permResponse = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions', {
+                    await gapi.client.request({
+                        path: '/drive/v3/files/' + fileId + '/permissions',
                         method: 'POST',
-                        headers: {
-                            'Authorization': 'Bearer ' + accessToken,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
+                        body: {
                             role: 'reader',
                             type: 'anyone'
-                        })
+                        }
                     });
-                    
-                    if (permResponse.ok) {
-                        console.log('Receipt file set to public (anyone with link)');
-                    } else {
-                        console.warn('Could not set file permissions, but file is uploaded');
-                    }
+                    console.log('File permissions set');
                 } catch (permError) {
-                    console.error('Error setting file permissions:', permError);
-                    // Don't throw - file is uploaded, just permissions failed
-                    console.warn('File uploaded but permissions may not be set correctly');
+                    console.warn('Could not set permissions (file still uploaded):', permError);
                 }
                 
-                // Final verification
-                if (!fileId) {
-                    throw new Error('Upload completed but file ID is missing');
-                }
-                
-                console.log('=== FUEL TRACKER: Returning file ID:', fileId, '===');
                 return fileId;
                 
             } catch (error) {
                 console.error('=== FUEL TRACKER: UPLOAD ERROR ===');
-                console.error('Error message:', error.message);
-                console.error('Error type:', typeof error);
-                console.error('Full error:', error);
-                if (error.stack) {
-                    console.error('Error stack:', error.stack);
+                console.error('Error:', error);
+                if (error.result && error.result.error) {
+                    console.error('API Error:', JSON.stringify(error.result.error));
                 }
-                console.error('=== END UPLOAD ERROR ===');
+                console.error('=== END ERROR ===');
                 
-                // Re-throw with more context
-                const enhancedError = new Error('Upload failed: ' + (error.message || error.toString()));
-                enhancedError.originalError = error;
-                throw enhancedError;
+                let errorMsg = 'Upload failed: ';
+                if (error.result && error.result.error) {
+                    errorMsg += error.result.error.message || JSON.stringify(error.result.error);
+                } else {
+                    errorMsg += error.message || error.toString();
+                }
+                
+                throw new Error(errorMsg);
             }
         }
         
