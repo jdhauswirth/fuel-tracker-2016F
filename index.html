@@ -178,6 +178,37 @@
             box-shadow: 0 0 0 3px rgba(69, 160, 201, 0.1);
         }
         
+        #receiptButton {
+            width: 100%;
+            padding: 20px;
+            background: linear-gradient(135deg, #45A0C9 0%, #3578A5 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-height: 60px;
+        }
+        
+        #receiptButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(69, 160, 201, 0.4);
+        }
+        
+        #receiptButton:active {
+            transform: translateY(0);
+        }
+        
+        #receiptButton.has-file {
+            background: linear-gradient(135deg, #5FA8D0 0%, #45A0C9 100%);
+        }
+        
         .calculated {
             background: #f5f5f5;
             color: #666;
@@ -341,10 +372,21 @@
             border-radius: 8px;
             display: none;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .receipt-image:hover {
+            transform: scale(1.02);
         }
         
         .receipt-image.show {
             display: block;
+        }
+        
+        .receipt-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
         }
         
         #receiptPreview img {
@@ -506,8 +548,14 @@
                     
                     <div class="form-group">
                         <label for="receipt">📷 Receipt Image (optional)</label>
-                        <input type="file" id="receipt" accept="image/*" style="padding: 8px;">
-                        <p class="info-text">Tap to choose from gallery or take a new photo</p>
+                        <div style="position: relative;">
+                            <input type="file" id="receipt" accept="image/*" style="position: absolute; opacity: 0; width: 0; height: 0;">
+                            <button type="button" id="receiptButton" onclick="document.getElementById('receipt').click()">
+                                <span style="font-size: 24px;">📷</span>
+                                <span id="receiptButtonText">Choose Receipt Photo</span>
+                            </button>
+                        </div>
+                        <p class="info-text" style="margin-top: 8px;">Tap to choose from gallery or take a new photo</p>
                         <div id="receiptPreview" style="margin-top: 10px;"></div>
                     </div>
                     
@@ -1129,6 +1177,8 @@
         document.getElementById('receipt').addEventListener('change', function(e) {
             const file = e.target.files[0];
             const preview = document.getElementById('receiptPreview');
+            const button = document.getElementById('receiptButton');
+            const buttonText = document.getElementById('receiptButtonText');
             
             if (file) {
                 // Validate file type
@@ -1136,6 +1186,8 @@
                     showStatus('Please select an image file', 'error');
                     e.target.value = ''; // Clear the input
                     preview.innerHTML = '';
+                    button.classList.remove('has-file');
+                    buttonText.textContent = 'Choose Receipt Photo';
                     return;
                 }
                 
@@ -1144,8 +1196,14 @@
                     showStatus('Image file is too large. Please use an image smaller than 10MB', 'error');
                     e.target.value = ''; // Clear the input
                     preview.innerHTML = '';
+                    button.classList.remove('has-file');
+                    buttonText.textContent = 'Choose Receipt Photo';
                     return;
                 }
+                
+                // Update button to show file is selected
+                button.classList.add('has-file');
+                buttonText.textContent = '✓ ' + file.name.substring(0, 30) + (file.name.length > 30 ? '...' : '');
                 
                 const reader = new FileReader();
                 reader.onload = function(event) {
@@ -1160,10 +1218,14 @@
                 reader.onerror = function() {
                     showStatus('Error reading image file', 'error');
                     preview.innerHTML = '';
+                    button.classList.remove('has-file');
+                    buttonText.textContent = 'Choose Receipt Photo';
                 };
                 reader.readAsDataURL(file);
             } else {
                 preview.innerHTML = '';
+                button.classList.remove('has-file');
+                buttonText.textContent = 'Choose Receipt Photo';
             }
         });
         
@@ -1371,18 +1433,26 @@
                     throw new Error('Upload failed: HTTP ' + uploadResponse.status + ' - ' + errorText);
                 }
                 
-                // Step 4: Set permissions (optional, don't fail if this fails)
+                // Step 4: Set permissions to allow viewing (optional, don't fail if this fails)
                 try {
-                    await gapi.client.request({
-                        path: '/drive/v3/files/' + fileId + '/permissions',
-                        method: 'POST',
-                        body: {
-                            role: 'reader',
-                            type: 'anyone'
-                        }
-                    });
+                    const token = gapi.client.getToken();
+                    const currentAccessToken = token ? token.access_token : accessToken;
+                    
+                    if (currentAccessToken) {
+                        await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + currentAccessToken,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                role: 'reader',
+                                type: 'anyone'
+                            })
+                        });
+                    }
                 } catch (permError) {
-                    // Permissions are optional, file is still uploaded
+                    // Permissions are optional - image can still be viewed using access token
                 }
                 
                 return fileId;
@@ -1404,55 +1474,106 @@
             }
         }
         
-        function toggleReceiptImage(fileId, buttonElement) {
+        async function toggleReceiptImage(fileId, buttonElement) {
             const container = buttonElement.parentElement;
             let img = container.querySelector('.receipt-image');
             
             if (img) {
                 img.classList.toggle('show');
                 buttonElement.textContent = img.classList.contains('show') ? '📷 Hide Receipt' : '📷 View Receipt';
-            } else {
+                return;
+            }
+            
+            // Show loading state
+            buttonElement.textContent = '⏳ Loading...';
+            buttonElement.disabled = true;
+            
+            img = document.createElement('img');
+            img.className = 'receipt-image show';
+            img.alt = 'Receipt';
+            img.style.display = 'none';
+            container.appendChild(img);
+            
+            try {
+                // Get access token
+                const token = gapi.client.getToken();
+                const currentAccessToken = token ? token.access_token : accessToken;
+                
+                if (!currentAccessToken) {
+                    throw new Error('Not authenticated');
+                }
+                
+                // Fetch image using Drive API with access token
+                const response = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', {
+                    headers: {
+                        'Authorization': 'Bearer ' + currentAccessToken
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load image: ' + response.status);
+                }
+                
+                // Convert response to blob, then to data URL
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    img.title = 'Click to open in new tab';
+                    img.onclick = function() {
+                        window.open('https://drive.google.com/file/d/' + fileId + '/view', '_blank');
+                    };
+                    buttonElement.textContent = '📷 Hide Receipt';
+                    buttonElement.disabled = false;
+                };
+                reader.onerror = function() {
+                    throw new Error('Failed to read image data');
+                };
+                reader.readAsDataURL(blob);
+                
+            } catch (error) {
+                // If API fetch fails, try public URL methods
+                console.error('API fetch failed, trying public URLs:', error);
+                
+                // Remove loading image
+                img.remove();
+                
+                // Try public URL methods
                 img = document.createElement('img');
                 img.className = 'receipt-image show';
-                
-                // Use Drive thumbnail URL for better compatibility
-                img.src = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w800';
                 img.alt = 'Receipt';
                 
-                // Add error handler
+                // Try thumbnail URL first
+                img.src = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1200';
+                
                 img.onerror = function() {
-                    console.error('Failed to load receipt image with file ID:', fileId);
                     // Try alternative URL format
                     img.src = 'https://drive.google.com/uc?export=view&id=' + fileId;
                     
-                    // If that also fails
                     img.onerror = function() {
-                        console.error('Alternative URL also failed. File ID:', fileId);
-                        img.alt = 'Receipt image failed to load. File ID: ' + fileId;
-                        img.style.padding = '20px';
-                        img.style.background = '#ffebee';
-                        img.style.border = '2px solid #c62828';
-                        
-                        // Create a link to open in Drive directly
-                        const link = document.createElement('a');
-                        link.href = 'https://drive.google.com/file/d/' + fileId + '/view';
-                        link.target = '_blank';
-                        link.textContent = '📂 Open in Google Drive';
-                        link.style.display = 'block';
-                        link.style.marginTop = '10px';
-                        link.style.color = '#2196F3';
-                        link.style.textDecoration = 'underline';
-                        container.appendChild(link);
+                        // Both public URLs failed - show error and link
+                        img.style.display = 'none';
+                        const errorDiv = document.createElement('div');
+                        errorDiv.style.cssText = 'padding: 20px; background: #ffebee; border: 2px solid #c62828; border-radius: 8px; text-align: center;';
+                        errorDiv.innerHTML = '<p style="color: #c62828; margin-bottom: 10px;">⚠️ Image cannot be displayed</p>' +
+                            '<a href="https://drive.google.com/file/d/' + fileId + '/view" target="_blank" style="color: #2196F3; text-decoration: underline;">📂 Open in Google Drive</a>';
+                        container.appendChild(errorDiv);
+                        buttonElement.textContent = '📷 View Receipt';
+                        buttonElement.disabled = false;
                     };
                 };
                 
-                // Add load success handler
                 img.onload = function() {
-                    console.log('Receipt image loaded successfully for file ID:', fileId);
+                    img.title = 'Click to open in new tab';
+                    img.onclick = function() {
+                        window.open('https://drive.google.com/file/d/' + fileId + '/view', '_blank');
+                    };
+                    buttonElement.textContent = '📷 Hide Receipt';
+                    buttonElement.disabled = false;
                 };
                 
                 container.appendChild(img);
-                buttonElement.textContent = '📷 Hide Receipt';
             }
         }
         
@@ -1564,6 +1685,11 @@
                 
                 document.getElementById('fuelForm').reset();
                 document.getElementById('receiptPreview').innerHTML = '';
+                // Reset receipt button
+                const receiptButton = document.getElementById('receiptButton');
+                const receiptButtonText = document.getElementById('receiptButtonText');
+                if (receiptButton) receiptButton.classList.remove('has-file');
+                if (receiptButtonText) receiptButtonText.textContent = 'Choose Receipt Photo';
                 setTodayDate();
                 document.getElementById('fuelType').value = 'R87';
                 document.getElementById('gallons').value = '13.500';
