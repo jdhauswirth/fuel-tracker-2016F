@@ -1318,11 +1318,20 @@
             try {
                 showStatus('Getting Drive folder...', 'info');
                 console.log('=== FUEL TRACKER: Starting Receipt Upload ===');
-                const folderId = await getOrCreateDriveFolder();
+                
+                let folderId;
+                try {
+                    folderId = await getOrCreateDriveFolder();
+                } catch (folderError) {
+                    console.error('=== FUEL TRACKER: Error getting folder ===');
+                    console.error('Folder error:', folderError);
+                    throw new Error('Failed to get Drive folder: ' + (folderError.message || folderError));
+                }
+                
                 console.log('=== FUEL TRACKER: Uploading to folder ID:', folderId, '===');
                 
                 if (!folderId) {
-                    throw new Error('Folder ID is missing');
+                    throw new Error('Folder ID is missing - folder function returned null/undefined');
                 }
                 
                 if (!accessToken) {
@@ -1359,13 +1368,22 @@
                     throw new Error('Failed to create file: ' + createResponse.status + ' - ' + errorText);
                 }
                 
-                const createResult = await createResponse.json();
+                let createResult;
+                try {
+                    createResult = await createResponse.json();
+                } catch (jsonError) {
+                    const responseText = await createResponse.text();
+                    console.error('=== FUEL TRACKER: Failed to parse JSON response ===');
+                    console.error('Response text:', responseText);
+                    throw new Error('Failed to parse server response: ' + jsonError.message + '. Response: ' + responseText.substring(0, 200));
+                }
+                
                 const fileId = createResult.id;
                 
                 if (!fileId) {
                     console.error('=== FUEL TRACKER: No file ID in response ===');
-                    console.error('Response:', createResult);
-                    throw new Error('Failed to create file - no ID returned');
+                    console.error('Full response:', JSON.stringify(createResult));
+                    throw new Error('Failed to create file - no ID returned. Response: ' + JSON.stringify(createResult));
                 }
                 
                 console.log('=== FUEL TRACKER: File created with ID:', fileId, '===');
@@ -1392,10 +1410,22 @@
                     throw new Error('Failed to upload file content: ' + uploadResponse.status + ' - ' + errorText);
                 }
                 
-                const uploadResult = await uploadResponse.json();
+                let uploadResult;
+                try {
+                    uploadResult = await uploadResponse.json();
+                } catch (jsonError) {
+                    // If JSON parsing fails, the upload might still have succeeded
+                    // The file ID we already have should be valid
+                    console.warn('=== FUEL TRACKER: Could not parse upload response JSON, but upload may have succeeded ===');
+                    console.warn('Using file ID from creation step:', fileId);
+                }
+                
                 console.log('=== FUEL TRACKER: Receipt uploaded successfully! ===');
                 console.log('Folder ID:', folderId);
                 console.log('File ID:', fileId);
+                if (uploadResult) {
+                    console.log('Upload result:', uploadResult);
+                }
                 console.log('=== END UPLOAD SUCCESS ===');
                 
                 // Step 3: Make the file publicly viewable (anyone with link can view)
@@ -1423,17 +1453,28 @@
                     console.warn('File uploaded but permissions may not be set correctly');
                 }
                 
+                // Final verification
+                if (!fileId) {
+                    throw new Error('Upload completed but file ID is missing');
+                }
+                
+                console.log('=== FUEL TRACKER: Returning file ID:', fileId, '===');
                 return fileId;
                 
             } catch (error) {
                 console.error('=== FUEL TRACKER: UPLOAD ERROR ===');
                 console.error('Error message:', error.message);
+                console.error('Error type:', typeof error);
                 console.error('Full error:', error);
                 if (error.stack) {
                     console.error('Error stack:', error.stack);
                 }
                 console.error('=== END UPLOAD ERROR ===');
-                throw error;
+                
+                // Re-throw with more context
+                const enhancedError = new Error('Upload failed: ' + (error.message || error.toString()));
+                enhancedError.originalError = error;
+                throw enhancedError;
             }
         }
         
@@ -1533,7 +1574,7 @@
                     }
                 } catch (error) {
                     // Show detailed error in UI
-                    const errorMsg = error.message || 'Unknown error';
+                    const errorMsg = error.message || error.toString() || 'Unknown error';
                     let detailedError = '❌ Receipt Upload Failed: ' + errorMsg;
                     
                     // Add more context based on error type
@@ -1543,12 +1584,22 @@
                         detailedError += ' (Permission issue - check folder access)';
                     } else if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
                         detailedError += ' (Folder not found - check folder ID)';
-                    } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+                    } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
                         detailedError += ' (Network error - check internet connection)';
                     }
                     
                     detailedError += ' Data will still be saved to sheet.';
+                    
+                    // Show error in status
                     showStatus(detailedError, 'error');
+                    
+                    // Also log full error details
+                    console.error('=== FULL UPLOAD ERROR DETAILS ===');
+                    console.error('Error object:', error);
+                    console.error('Error message:', errorMsg);
+                    console.error('Error stack:', error.stack);
+                    console.error('=== END ERROR DETAILS ===');
+                    
                     receiptFileId = null; // Ensure it's null on error
                 }
             }
