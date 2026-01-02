@@ -301,12 +301,69 @@
             overflow-y: auto;
         }
         
+        .year-section {
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .year-header {
+            background: linear-gradient(135deg, #45A0C9 0%, #3578A5 100%);
+            color: white;
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+        
+        .year-header:hover {
+            background: linear-gradient(135deg, #5FA8D0 0%, #45A0C9 100%);
+        }
+        
+        .year-header .year-count {
+            font-size: 14px;
+            opacity: 0.9;
+            font-weight: normal;
+        }
+        
+        .year-header .expand-icon {
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+        
+        .year-header.collapsed .expand-icon {
+            transform: rotate(-90deg);
+        }
+        
+        .year-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        
+        .year-content.expanded {
+            max-height: 10000px;
+        }
+        
+        .year-entries {
+            padding: 10px;
+        }
+        
         .history-item {
             background: #f9f9f9;
             padding: 15px;
             margin-bottom: 10px;
             border-radius: 8px;
             border-left: 4px solid #45A0C9;
+        }
+        
+        .history-item:last-child {
+            margin-bottom: 0;
         }
         
         .history-item-date {
@@ -891,6 +948,60 @@
             }
         }
         
+        function createHistoryItem(row) {
+            const gallons = parseFloat(row[3]) || 0;
+            const pricePerGal = parseFloat(String(row[5]).replace(/[\$,\s]/g, '')) || 0;
+            const fillCost = row[6] ? String(row[6]).replace(/[\$,\s]/g, '') : (gallons * pricePerGal).toFixed(2);
+            const receiptFileId = row[17] || null; // Column S (index 17)
+            const costLine = row[3] + ' gallons @ $' + pricePerGal.toFixed(3) + '/gal = $' + fillCost;
+            
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            
+            let htmlContent = '';
+            htmlContent += '<div class="history-item-date">' + row[0] + '</div>'; // Date
+            htmlContent += '<div class="history-item-detail">🚗 Odometer: ' + row[1] + ' miles</div>'; // Odometer
+            htmlContent += '<div class="history-item-detail">📏 Miles/Fill: ' + row[2] + ' miles</div>'; // Miles/Fill
+            htmlContent += '<div class="history-item-detail">⛽ ' + costLine + '</div>';
+            htmlContent += '<div class="history-item-detail">📊 MPG: ' + (row[4] || 'N/A') + '</div>'; // MPG
+            htmlContent += '<div class="history-item-detail">⛽ Fuel Type: ' + (row[7] || 'N/A') + '</div>'; // Fuel Type
+            htmlContent += '<div class="history-item-detail">📍 ' + (row[8] || 'N/A') + '</div>'; // Location
+            
+            if (receiptFileId) {
+                htmlContent += '<button class="receipt-btn" onclick="toggleReceiptImage(\'' + receiptFileId + '\', this)">📷 View Receipt</button>';
+            }
+            
+            item.innerHTML = htmlContent;
+            return item;
+        }
+        
+        function getYearFromDate(dateString) {
+            // Try to parse date string (could be MM/DD/YYYY or other formats)
+            const date = new Date(dateString);
+            if (!isNaN(date.getTime())) {
+                return date.getFullYear();
+            }
+            // Fallback: try to extract year from string
+            const yearMatch = dateString.match(/\d{4}/);
+            return yearMatch ? parseInt(yearMatch[0]) : new Date().getFullYear();
+        }
+        
+        function toggleYearSection(year) {
+            const header = document.getElementById('year-header-' + year);
+            const content = document.getElementById('year-content-' + year);
+            
+            if (header && content) {
+                const isExpanded = content.classList.contains('expanded');
+                if (isExpanded) {
+                    content.classList.remove('expanded');
+                    header.classList.add('collapsed');
+                } else {
+                    content.classList.add('expanded');
+                    header.classList.remove('collapsed');
+                }
+            }
+        }
+        
         async function loadHistory() {
             showStatus('Loading history...', 'info');
             try {
@@ -917,37 +1028,68 @@
                 historyList.innerHTML = '';
                 
                 if (dataRows && dataRows.length > 0) {
-                    for (let i = dataRows.length - 1; i >= 0; i--) {
-                        const row = dataRows[i];
-                        // Column E (index 3): Gallons
-                        // Column G (index 5): $/Gal
-                        // Column H (index 6): Fill $ (calculated, but we can use it if available)
-                        const gallons = parseFloat(row[3]) || 0;
-                        const pricePerGal = parseFloat(String(row[5]).replace(/[\$,\s]/g, '')) || 0;
-                        const fillCost = row[6] ? String(row[6]).replace(/[\$,\s]/g, '') : (gallons * pricePerGal).toFixed(2);
-                        const receiptFileId = row[17] || null; // Column S (index 17)
-                        
-                        const item = document.createElement('div');
-                        item.className = 'history-item';
-                        const costLine = row[3] + ' gallons @ $' + pricePerGal.toFixed(3) + '/gal = $' + fillCost;
-                        
-                        let htmlContent = '';
-                        htmlContent += '<div class="history-item-date">' + row[0] + '</div>'; // Date
-                        htmlContent += '<div class="history-item-detail">🚗 Odometer: ' + row[1] + ' miles</div>'; // Odometer
-                        htmlContent += '<div class="history-item-detail">📏 Miles/Fill: ' + row[2] + ' miles</div>'; // Miles/Fill
-                        htmlContent += '<div class="history-item-detail">⛽ ' + costLine + '</div>';
-                        htmlContent += '<div class="history-item-detail">📊 MPG: ' + (row[4] || 'N/A') + '</div>'; // MPG
-                        htmlContent += '<div class="history-item-detail">⛽ Fuel Type: ' + (row[7] || 'N/A') + '</div>'; // Fuel Type
-                        htmlContent += '<div class="history-item-detail">📍 ' + (row[8] || 'N/A') + '</div>'; // Location
-                        
-                        if (receiptFileId) {
-                            htmlContent += '<button class="receipt-btn" onclick="toggleReceiptImage(\'' + receiptFileId + '\', this)">📷 View Receipt</button>';
+                    // Reverse to get chronological order (newest first)
+                    const reversedRows = dataRows.slice().reverse();
+                    
+                    // Get most recent 10 entries
+                    const recentEntries = reversedRows.slice(0, 10);
+                    
+                    // Group remaining entries by year
+                    const remainingEntries = reversedRows.slice(10);
+                    const entriesByYear = {};
+                    
+                    remainingEntries.forEach(function(row) {
+                        const year = getYearFromDate(row[0]);
+                        if (!entriesByYear[year]) {
+                            entriesByYear[year] = [];
                         }
+                        entriesByYear[year].push(row);
+                    });
+                    
+                    // Create "Recent" section (always expanded)
+                    if (recentEntries.length > 0) {
+                        const recentSection = document.createElement('div');
+                        recentSection.className = 'year-section';
+                        recentSection.innerHTML = '<div class="year-header" style="background: linear-gradient(135deg, #5FA8D0 0%, #45A0C9 100%);">' +
+                            '<span>📅 Recent Entries (' + recentEntries.length + ')</span>' +
+                            '<span class="year-count">Most recent</span>' +
+                            '</div>' +
+                            '<div class="year-content expanded">' +
+                            '<div class="year-entries"></div>' +
+                            '</div>';
+                        historyList.appendChild(recentSection);
                         
-                        item.innerHTML = htmlContent;
-                        historyList.appendChild(item);
+                        const recentEntriesContainer = recentSection.querySelector('.year-entries');
+                        recentEntries.forEach(function(row) {
+                            recentEntriesContainer.appendChild(createHistoryItem(row));
+                        });
                     }
-                    showStatus('History loaded!', 'success');
+                    
+                    // Create year sections (collapsed by default)
+                    const sortedYears = Object.keys(entriesByYear).sort(function(a, b) {
+                        return parseInt(b) - parseInt(a); // Newest years first
+                    });
+                    
+                    sortedYears.forEach(function(year) {
+                        const yearEntries = entriesByYear[year];
+                        const yearSection = document.createElement('div');
+                        yearSection.className = 'year-section';
+                        yearSection.innerHTML = '<div class="year-header collapsed" id="year-header-' + year + '" onclick="toggleYearSection(' + year + ')">' +
+                            '<span>' + year + ' (' + yearEntries.length + ' entries)</span>' +
+                            '<span class="expand-icon">▼</span>' +
+                            '</div>' +
+                            '<div class="year-content" id="year-content-' + year + '">' +
+                            '<div class="year-entries"></div>' +
+                            '</div>';
+                        historyList.appendChild(yearSection);
+                        
+                        const yearEntriesContainer = yearSection.querySelector('.year-entries');
+                        yearEntries.forEach(function(row) {
+                            yearEntriesContainer.appendChild(createHistoryItem(row));
+                        });
+                    });
+                    
+                    showStatus('History loaded! Showing ' + recentEntries.length + ' recent entries. Click year headers to expand.', 'success');
                 } else {
                     historyList.innerHTML = '<p style="text-align: center; color: #999;">No fuel stops found</p>';
                 }
