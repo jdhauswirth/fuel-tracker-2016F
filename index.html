@@ -1202,11 +1202,19 @@
                     
                     if (verifyResponse.result && verifyResponse.result.mimeType === 'application/vnd.google-apps.folder') {
                         driveFolder = knownFolderId;
-                        console.log('Using known Fuel Receipts 2016 Subaru Forester folder:', driveFolder);
+                        console.log('=== FUEL TRACKER: Using known Fuel Receipts 2016 Subaru Forester folder ===');
+                        console.log('Folder ID:', driveFolder);
+                        console.log('Folder Name:', verifyResponse.result.name);
                         return driveFolder;
                     }
                 } catch (verifyError) {
-                    console.log('Known folder ID verification failed, will search by name:', verifyError);
+                    console.log('=== FUEL TRACKER: Folder verification failed, but will use known folder ID anyway ===');
+                    console.log('Verification error:', verifyError);
+                    // Use the known folder ID even if verification fails
+                    // (verification might fail due to permissions, but upload might still work)
+                    driveFolder = knownFolderId;
+                    console.log('Using known folder ID:', driveFolder);
+                    return driveFolder;
                 }
                 
                 // Fallback: Look for the existing folder by name
@@ -1628,4 +1636,3 @@
 </body>
 </html>
 
-    
