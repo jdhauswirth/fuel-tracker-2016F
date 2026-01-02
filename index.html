@@ -1257,6 +1257,7 @@
             if (!file) return null;
             
             try {
+                showStatus('Getting Drive folder...', 'info');
                 console.log('=== FUEL TRACKER: Starting Receipt Upload ===');
                 const folderId = await getOrCreateDriveFolder();
                 console.log('=== FUEL TRACKER: Uploading to folder ID:', folderId, '===');
@@ -1268,6 +1269,8 @@
                 if (!accessToken) {
                     throw new Error('Access token is missing - please sign in again');
                 }
+                
+                showStatus('Creating file in Drive...', 'info');
                 
                 const timestamp = new Date().getTime();
                 const fileName = 'Receipt_' + fuelDate + '_' + timestamp + '.jpg';
@@ -1307,6 +1310,7 @@
                 }
                 
                 console.log('=== FUEL TRACKER: File created with ID:', fileId, '===');
+                showStatus('File created. Uploading image content...', 'info');
                 
                 // Step 2: Upload file content
                 const fileContent = await file.arrayBuffer();
@@ -1445,33 +1449,47 @@
             
             if (receiptFile) {
                 try {
+                    // Pre-upload validation
                     if (!accessToken) {
                         throw new Error('Not authenticated. Please sign in again.');
                     }
                     
+                    if (!receiptFile.type || !receiptFile.type.startsWith('image/')) {
+                        throw new Error('Selected file is not an image. Please select an image file.');
+                    }
+                    
+                    if (receiptFile.size > 10 * 1024 * 1024) {
+                        throw new Error('Image file is too large (max 10MB). Please use a smaller image.');
+                    }
+                    
                     showStatus('Uploading receipt image...', 'info');
-                    console.log('Starting receipt upload, file size:', receiptFile.size, 'bytes, type:', receiptFile.type);
                     
                     receiptFileId = await uploadReceiptToDrive(receiptFile, dateValue);
                     
                     if (receiptFileId) {
-                        console.log('Receipt uploaded successfully, file ID:', receiptFileId);
-                        showStatus('Receipt uploaded successfully!', 'success');
+                        showStatus('✅ Receipt uploaded successfully! File ID: ' + receiptFileId, 'success');
                     } else {
-                        console.warn('Receipt upload returned no file ID');
-                        showStatus('Warning: Receipt upload may have failed', 'error');
+                        showStatus('❌ Receipt upload failed: No file ID returned. Data will still be saved.', 'error');
+                        receiptFileId = null;
                     }
                 } catch (error) {
-                    console.error('=== RECEIPT UPLOAD ERROR ===');
-                    console.error('Error message:', error.message);
-                    console.error('Error details:', error);
-                    if (error.stack) {
-                        console.error('Error stack:', error.stack);
-                    }
-                    console.error('=== END ERROR ===');
-                    
+                    // Show detailed error in UI
                     const errorMsg = error.message || 'Unknown error';
-                    showStatus('❌ Receipt upload failed: ' + errorMsg + '. Check console (F12) for details. Data will still be saved.', 'error');
+                    let detailedError = '❌ Receipt Upload Failed: ' + errorMsg;
+                    
+                    // Add more context based on error type
+                    if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
+                        detailedError += ' (Authentication issue - try signing out and back in)';
+                    } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
+                        detailedError += ' (Permission issue - check folder access)';
+                    } else if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+                        detailedError += ' (Folder not found - check folder ID)';
+                    } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+                        detailedError += ' (Network error - check internet connection)';
+                    }
+                    
+                    detailedError += ' Data will still be saved to sheet.';
+                    showStatus(detailedError, 'error');
                     receiptFileId = null; // Ensure it's null on error
                 }
             }
@@ -1487,9 +1505,20 @@
                 receiptFileId: receiptFileId
             };
             
+            // Show status about receipt
+            if (receiptFile && !receiptFileId) {
+                showStatus('⚠️ Warning: Receipt image was selected but upload failed. Saving data without receipt link.', 'error');
+            } else if (receiptFile && receiptFileId) {
+                showStatus('✅ Receipt uploaded (ID: ' + receiptFileId + '). Saving to sheet...', 'info');
+            }
+            
             try {
                 await writeToSheet(formData);
-                showStatus('Fuel stop logged successfully!', 'success');
+                if (receiptFileId) {
+                    showStatus('✅ Fuel stop logged successfully! Receipt saved to column S.', 'success');
+                } else {
+                    showStatus('✅ Fuel stop logged successfully! (No receipt image)', 'success');
+                }
                 
                 lastOdometer = formData.odometer;
                 
@@ -1597,8 +1626,12 @@
                     range: sheetName + '!S' + nextRow,
                     values: [[data.receiptFileId]]
                 });
+                showStatus('Saving receipt file ID (' + data.receiptFileId + ') to column S...', 'info');
             } else {
                 console.log('No receipt file ID to save');
+                if (document.getElementById('receipt').files[0]) {
+                    showStatus('⚠️ Warning: Receipt was selected but no file ID available. Check upload errors above.', 'error');
+                }
             }
             
             const batchResponse = await gapi.client.sheets.spreadsheets.values.batchUpdate({
