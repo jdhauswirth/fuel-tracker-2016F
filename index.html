@@ -2124,7 +2124,7 @@
                 }
             });
             
-            // Column G ($/Gal) - $ sign and 3 decimals
+            // Column G ($/Gal) - Accounting format with 3 decimals
             requests.push({
                 repeatCell: {
                     range: {
@@ -2137,8 +2137,8 @@
                     cell: {
                         userEnteredFormat: {
                             numberFormat: {
-                                type: 'CURRENCY',
-                                pattern: '$0.000'
+                                type: 'NUMBER',
+                                pattern: '_($* #,##0.000_);_($* (#,##0.000);_($* "-"??_);_(@_)'
                             },
                             horizontalAlignment: 'CENTER'
                         }
@@ -2213,6 +2213,85 @@
                         }
                     },
                     fields: 'userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column I (Fuel Type) - Center
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 8, // Column I
+                        endColumnIndex: 9
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column K (Day) - Center
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 10, // Column K
+                        endColumnIndex: 11
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column L (DaysOnTank) - Center
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 11, // Column L
+                        endColumnIndex: 12
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            horizontalAlignment: 'CENTER'
+                        }
+                    },
+                    fields: 'userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column S (Receipt Image URL) - Arial 14pt
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 18, // Column S
+                        endColumnIndex: 19
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            textFormat: {
+                                fontFamily: 'Arial',
+                                fontSize: 14
+                            }
+                        }
+                    },
+                    fields: 'userEnteredFormat.textFormat.fontFamily,userEnteredFormat.textFormat.fontSize'
                 }
             });
             
