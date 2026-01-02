@@ -754,23 +754,15 @@
                         row[1] && String(row[1]).trim() !== '';
                 }) : [];
                 
-                console.log('Total rows returned:', values ? values.length : 0);
-                console.log('Rows with data:', dataRows.length);
-                
                 if (dataRows && dataRows.length > 0) {
                     const lastRow = dataRows[dataRows.length - 1];
-                    console.log('Last data row:', lastRow);
                     
                     // Column B (index 0): Date
                     // Column C (index 1): Odometer
                     const lastDate = lastRow[0];
                     const odometerValue = lastRow[1];
                     
-                    console.log('Raw odometer value from sheet:', odometerValue, 'Type:', typeof odometerValue);
-                    
                     lastOdometer = parseFloat(String(odometerValue).replace(/,/g, ''));
-                    
-                    console.log('Parsed lastOdometer:', lastOdometer);
                     
                     let daysAgo = '';
                     if (lastDate) {
@@ -795,12 +787,7 @@
                     const pricePerGalValues = [];
                     const startIndex = Math.max(0, dataRows.length - 4);
                     
-                    console.log('=== DEBUGGING PRICE CALCULATION ===');
-                    console.log('Reading data rows from index', startIndex, 'to', dataRows.length - 1);
-                    
                     for (let i = startIndex; i < dataRows.length; i++) {
-                        console.log('Data row', i, ':', dataRows[i]);
-                        
                         // Column D (index 2): Miles/Fill
                         const milesFillValue = dataRows[i][2];
                         if (milesFillValue && !isNaN(milesFillValue)) {
@@ -809,25 +796,13 @@
                         
                         // Column G (index 5): $/Gal
                         let priceValue = dataRows[i][5];
-                        console.log('  Column G (index 5) raw value:', priceValue, 'Type:', typeof priceValue);
-                        
                         if (priceValue) {
                             const cleanedPrice = String(priceValue).replace(/[\$,\s]/g, '').trim();
-                            console.log('  Cleaned price:', cleanedPrice);
-                            
                             if (cleanedPrice && !isNaN(cleanedPrice)) {
-                                const parsedPrice = parseFloat(cleanedPrice);
-                                console.log('  ✓ Parsed price:', parsedPrice);
-                                pricePerGalValues.push(parsedPrice);
-                            } else {
-                                console.log('  ✗ Cleaned price is not a valid number');
+                                pricePerGalValues.push(parseFloat(cleanedPrice));
                             }
-                        } else {
-                            console.log('  ✗ Price value is empty');
                         }
                     }
-                    
-                    console.log('Collected price values:', pricePerGalValues);
                     
                     if (milesFillValues.length > 0) {
                         const averageMilesFill = milesFillValues.reduce(function(a, b) { return a + b; }, 0) / milesFillValues.length;
@@ -840,13 +815,7 @@
                     if (pricePerGalValues.length > 0) {
                         const averagePrice = pricePerGalValues.reduce(function(a, b) { return a + b; }, 0) / pricePerGalValues.length;
                         document.getElementById('pricePerGal').value = averagePrice.toFixed(3);
-                        console.log('✓ Average price calculated:', averagePrice.toFixed(3));
-                        console.log('✓ Set $/Gal field to:', document.getElementById('pricePerGal').value);
-                    } else {
-                        console.log('✗ No valid price data found in Column G (index 5)');
-                        console.log('  Make sure your prices are in Column G of your sheet');
                     }
-                    console.log('=== END DEBUGGING ===');
                     
                     // Load unique locations from Column J (index 8)
                     const uniqueLocations = new Set();
@@ -1264,18 +1233,12 @@
                     
                     if (verifyResponse.result && verifyResponse.result.mimeType === 'application/vnd.google-apps.folder') {
                         driveFolder = knownFolderId;
-                        console.log('=== FUEL TRACKER: Using known Fuel Receipts 2016 Subaru Forester folder ===');
-                        console.log('Folder ID:', driveFolder);
-                        console.log('Folder Name:', verifyResponse.result.name);
                         return driveFolder;
                     }
                 } catch (verifyError) {
-                    console.log('=== FUEL TRACKER: Folder verification failed, but will use known folder ID anyway ===');
-                    console.log('Verification error:', verifyError);
                     // Use the known folder ID even if verification fails
                     // (verification might fail due to permissions, but upload might still work)
                     driveFolder = knownFolderId;
-                    console.log('Using known folder ID:', driveFolder);
                     return driveFolder;
                 }
                 
@@ -1291,7 +1254,6 @@
                 
                 if (response.result.files && response.result.files.length > 0) {
                     driveFolder = response.result.files[0].id;
-                    console.log('Found existing Fuel Receipts 2016 Subaru Forester folder by name:', driveFolder);
                     return driveFolder;
                 }
                 
@@ -1306,28 +1268,36 @@
                 });
                 
                 driveFolder = createResponse.result.id;
-                console.log('Created new Fuel Receipts 2016 Subaru Forester folder:', driveFolder);
                 return driveFolder;
                 
             } catch (error) {
-                console.error('Error with Drive folder:', error);
                 throw error;
             }
         }
         
         async function uploadReceiptToDrive(file, fuelDate) {
-            if (!file) return null;
+            if (!file) {
+                throw new Error('No file provided');
+            }
+            
+            let folderId, fileId;
             
             try {
+                // Validation
+                if (!gapi || !gapi.client) {
+                    throw new Error('Google API not loaded. Please refresh the page.');
+                }
+                
+                if (!accessToken && !gapi.client.getToken()) {
+                    throw new Error('Not authenticated. Please sign in again.');
+                }
+                
                 showStatus('Getting Drive folder...', 'info');
-                console.log('=== FUEL TRACKER: Starting Receipt Upload ===');
                 
-                // Get folder ID
-                const folderId = await getOrCreateDriveFolder();
-                console.log('=== FUEL TRACKER: Using folder ID:', folderId, '===');
-                
+                // Step 1: Get folder ID
+                folderId = await getOrCreateDriveFolder();
                 if (!folderId) {
-                    throw new Error('Folder ID is missing');
+                    throw new Error('Folder ID is missing - could not get or create folder');
                 }
                 
                 const timestamp = new Date().getTime();
@@ -1335,62 +1305,73 @@
                 
                 showStatus('Creating file in Drive...', 'info');
                 
-                // Step 1: Create empty file with metadata using gapi.client
-                const createResponse = await gapi.client.request({
-                    path: '/drive/v3/files',
-                    method: 'POST',
-                    body: {
-                        name: fileName,
-                        parents: [folderId]
-                    },
-                    params: {
-                        fields: 'id'
+                // Step 2: Create empty file with metadata
+                let createResponse;
+                try {
+                    createResponse = await gapi.client.request({
+                        path: '/drive/v3/files',
+                        method: 'POST',
+                        body: {
+                            name: fileName,
+                            parents: [folderId]
+                        },
+                        params: {
+                            fields: 'id'
+                        }
+                    });
+                } catch (createError) {
+                    let createErrMsg = 'Failed to create file: ';
+                    if (createError.result && createError.result.error) {
+                        createErrMsg += createError.result.error.message || JSON.stringify(createError.result.error);
+                    } else {
+                        createErrMsg += createError.message || createError.toString();
                     }
-                });
-                
-                if (!createResponse || !createResponse.result || !createResponse.result.id) {
-                    console.error('=== FUEL TRACKER: Failed to create file ===');
-                    console.error('Response:', createResponse);
-                    throw new Error('Failed to create file - no ID returned');
+                    throw new Error(createErrMsg);
                 }
                 
-                const fileId = createResponse.result.id;
-                console.log('=== FUEL TRACKER: File created with ID:', fileId, '===');
+                if (!createResponse || !createResponse.result || !createResponse.result.id) {
+                    throw new Error('Failed to create file - invalid response from Drive API');
+                }
                 
+                fileId = createResponse.result.id;
                 showStatus('Uploading image content...', 'info');
                 
-                // Step 2: Upload file content using fetch with access token
+                // Step 3: Upload file content
                 const fileContent = await file.arrayBuffer();
-                console.log('=== FUEL TRACKER: Uploading', fileContent.byteLength, 'bytes ===');
                 
-                // Get fresh access token from gapi
+                // Get access token
                 const token = gapi.client.getToken();
                 const currentAccessToken = token ? token.access_token : accessToken;
                 
                 if (!currentAccessToken) {
-                    throw new Error('No access token available');
+                    throw new Error('No access token available - authentication expired');
                 }
                 
-                const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': 'Bearer ' + currentAccessToken,
-                        'Content-Type': file.type || 'image/jpeg'
-                    },
-                    body: fileContent
-                });
+                let uploadResponse;
+                try {
+                    uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': 'Bearer ' + currentAccessToken,
+                            'Content-Type': file.type || 'image/jpeg'
+                        },
+                        body: fileContent
+                    });
+                } catch (fetchError) {
+                    throw new Error('Network error during upload: ' + (fetchError.message || fetchError.toString()));
+                }
                 
                 if (!uploadResponse.ok) {
-                    const errorText = await uploadResponse.text();
-                    console.error('=== FUEL TRACKER: Upload failed ===');
-                    console.error('Status:', uploadResponse.status);
-                    console.error('Error:', errorText);
-                    throw new Error('Upload failed: ' + uploadResponse.status + ' - ' + errorText);
+                    let errorText = 'Unknown error';
+                    try {
+                        errorText = await uploadResponse.text();
+                    } catch (e) {
+                        errorText = uploadResponse.status + ' ' + uploadResponse.statusText;
+                    }
+                    throw new Error('Upload failed: HTTP ' + uploadResponse.status + ' - ' + errorText);
                 }
                 
-                console.log('=== FUEL TRACKER: Upload successful! File ID:', fileId, '===');
-                
-                // Step 3: Set permissions (optional, don't fail if this fails)
+                // Step 4: Set permissions (optional, don't fail if this fails)
                 try {
                     await gapi.client.request({
                         path: '/drive/v3/files/' + fileId + '/permissions',
@@ -1400,26 +1381,23 @@
                             type: 'anyone'
                         }
                     });
-                    console.log('File permissions set');
                 } catch (permError) {
-                    console.warn('Could not set permissions (file still uploaded):', permError);
+                    // Permissions are optional, file is still uploaded
                 }
                 
                 return fileId;
                 
             } catch (error) {
-                console.error('=== FUEL TRACKER: UPLOAD ERROR ===');
-                console.error('Error:', error);
-                if (error.result && error.result.error) {
-                    console.error('API Error:', JSON.stringify(error.result.error));
-                }
-                console.error('=== END ERROR ===');
-                
+                // Extract error message
                 let errorMsg = 'Upload failed: ';
+                
                 if (error.result && error.result.error) {
-                    errorMsg += error.result.error.message || JSON.stringify(error.result.error);
+                    const apiError = error.result.error;
+                    errorMsg += apiError.message || JSON.stringify(apiError);
+                } else if (error.message) {
+                    errorMsg += error.message;
                 } else {
-                    errorMsg += error.message || error.toString();
+                    errorMsg += error.toString() || 'Unknown error';
                 }
                 
                 throw new Error(errorMsg);
@@ -1512,7 +1490,13 @@
                     
                     showStatus('Uploading receipt image...', 'info');
                     
-                    receiptFileId = await uploadReceiptToDrive(receiptFile, dateValue);
+                    // Add timeout to catch hanging uploads
+                    const uploadPromise = uploadReceiptToDrive(receiptFile, dateValue);
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('Upload timed out after 60 seconds')), 60000);
+                    });
+                    
+                    receiptFileId = await Promise.race([uploadPromise, timeoutPromise]);
                     
                     if (receiptFileId) {
                         showStatus('✅ Receipt uploaded successfully! File ID: ' + receiptFileId, 'success');
@@ -1521,34 +1505,32 @@
                         receiptFileId = null;
                     }
                 } catch (error) {
-                    // Show detailed error in UI
-                    const errorMsg = error.message || error.toString() || 'Unknown error';
+                    // Extract error message
+                    let errorMsg = error.message || 'Unknown error';
+                    
+                    if (error.result && error.result.error) {
+                        const apiError = error.result.error;
+                        errorMsg = apiError.message || errorMsg;
+                    }
+                    
+                    // Build error message with helpful context
                     let detailedError = '❌ Receipt Upload Failed: ' + errorMsg;
                     
-                    // Add more context based on error type
+                    // Add context based on error type
                     if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
-                        detailedError += ' (Authentication issue - try signing out and back in)';
+                        detailedError += ' (Try signing out and back in)';
                     } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
-                        detailedError += ' (Permission issue - check folder access)';
+                        detailedError += ' (Check Drive API is enabled in Google Cloud Console)';
                     } else if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
-                        detailedError += ' (Folder not found - check folder ID)';
-                    } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+                        detailedError += ' (Folder not found)';
+                    } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
                         detailedError += ' (Network error - check internet connection)';
                     }
                     
                     detailedError += ' Data will still be saved to sheet.';
                     
-                    // Show error in status
                     showStatus(detailedError, 'error');
-                    
-                    // Also log full error details
-                    console.error('=== FULL UPLOAD ERROR DETAILS ===');
-                    console.error('Error object:', error);
-                    console.error('Error message:', errorMsg);
-                    console.error('Error stack:', error.stack);
-                    console.error('=== END ERROR DETAILS ===');
-                    
-                    receiptFileId = null; // Ensure it's null on error
+                    receiptFileId = null;
                 }
             }
             
@@ -1679,14 +1661,11 @@
             ];
             
             if (data.receiptFileId) {
-                console.log('Saving receipt file ID to column S, row', nextRow + ':', data.receiptFileId);
                 batchData.push({
                     range: sheetName + '!S' + nextRow,
                     values: [[data.receiptFileId]]
                 });
-                showStatus('Saving receipt file ID (' + data.receiptFileId + ') to column S...', 'info');
             } else {
-                console.log('No receipt file ID to save');
                 if (document.getElementById('receipt').files[0]) {
                     showStatus('⚠️ Warning: Receipt was selected but no file ID available. Check upload errors above.', 'error');
                 }
