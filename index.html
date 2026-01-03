@@ -1390,17 +1390,17 @@
                     return;
                 }
                 
-                // Read from V2:V18
+                // Read from V2:V19 (expanded to include new V12 value)
                 const response = await gapi.client.sheets.spreadsheets.values.get({
                     spreadsheetId: spreadsheetId,
-                    range: sheetName + '!V2:V18',
+                    range: sheetName + '!V2:V19',
                 });
                 
                 const values = response.result.values;
                 const summaryContent = document.getElementById('summaryContent');
                 
-                if (!values || values.length < 17) {
-                    summaryContent.innerHTML = '<p style="text-align: center; color: #999;">Summary data not available. Make sure cells V2-V18 contain data.</p>';
+                if (!values || values.length < 18) {
+                    summaryContent.innerHTML = '<p style="text-align: center; color: #999;">Summary data not available. Make sure cells V2-V19 contain data.</p>';
                     showStatus('Summary data not found', 'error');
                     return;
                 }
@@ -1415,14 +1415,15 @@
                     runningAvgMPG: values[6] ? values[6][0] : 'N/A',
                     lowestMPG: values[7] ? values[7][0] : 'N/A',
                     highestMPG: values[8] ? values[8][0] : 'N/A',
-                    avgCostPerGal: values[9] ? values[9][0] : 'N/A',
-                    lowestPricePerGal: values[10] ? values[10][0] : 'N/A',
-                    highestPricePerGal: values[11] ? values[11][0] : 'N/A',
-                    avgMilesPerDay: values[12] ? values[12][0] : 'N/A',
-                    totalDaysOwned: values[13] ? values[13][0] : 'N/A',
-                    yearsOwned: values[14] ? values[14][0] : 'N/A',
-                    totalLifetimeCost: values[15] ? values[15][0] : 'N/A',
-                    totalLifetimeCostPerMile: values[16] ? values[16][0] : 'N/A'
+                    avgCostPerGal: values[9] ? values[9][0] : 'N/A', // V11
+                    recentGasPriceAvgLast4: values[10] ? values[10][0] : 'N/A', // V12 - NEW
+                    lowestPricePerGal: values[11] ? values[11][0] : 'N/A', // V13 (was V12)
+                    highestPricePerGal: values[12] ? values[12][0] : 'N/A', // V14 (was V13)
+                    avgMilesPerDay: values[13] ? values[13][0] : 'N/A', // V15 (was V14)
+                    totalDaysOwned: values[14] ? values[14][0] : 'N/A', // V16 (was V15)
+                    yearsOwned: values[15] ? values[15][0] : 'N/A', // V17 (was V16)
+                    totalLifetimeCost: values[16] ? values[16][0] : 'N/A', // V18 (was V17)
+                    totalLifetimeCostPerMile: values[17] ? values[17][0] : 'N/A' // V19 (was V18)
                 };
                 
                 let html = '';
@@ -1488,6 +1489,10 @@
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Average Cost per Gallon (Lifetime)</div>';
                 html += '<div class="summary-stat-value">$' + formatNumber(stats.avgCostPerGal) + '</div>';
+                html += '</div>';
+                html += '<div class="summary-stat">';
+                html += '<div class="summary-stat-label">Recent Gas Price (Avg Last 4 tanks)</div>';
+                html += '<div class="summary-stat-value">$' + formatNumber(stats.recentGasPriceAvgLast4) + '</div>';
                 html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Lowest Price Per Gallon (since July 08, 2016)</div>';
