@@ -804,6 +804,63 @@
             gisInited = true;
         }
         
+        // Check and restore authentication state on page load
+        async function checkAuthState() {
+            console.log('=== Checking auth state ===');
+            console.log('Standalone mode:', window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches);
+            
+            // Wait for gapi to be ready
+            const gapiReady = await waitForGapi();
+            if (!gapiReady) {
+                console.log('GAPI not ready yet');
+                return;
+            }
+            
+            // Check if we have saved credentials
+            const savedClientId = localStorage.getItem('fuelTracker_clientId');
+            const savedApiKey = localStorage.getItem('fuelTracker_apiKey');
+            const savedSpreadsheetId = localStorage.getItem('fuelTracker_spreadsheetId');
+            
+            console.log('Saved credentials:', {
+                clientId: savedClientId ? 'Found' : 'Missing',
+                apiKey: savedApiKey ? 'Found' : 'Missing',
+                spreadsheetId: savedSpreadsheetId ? 'Found' : 'Missing'
+            });
+            
+            if (!savedClientId || !savedApiKey || !savedSpreadsheetId) {
+                console.log('No saved credentials found - user needs to sign in');
+                return;
+            }
+            
+            // Check if gapi.client has a token
+            try {
+                if (gapi && gapi.client && gapi.client.getToken) {
+                    const token = gapi.client.getToken();
+                    console.log('GAPI token check:', token ? 'Token found' : 'No token');
+                    if (token && token.access_token) {
+                        console.log('Found existing token, restoring auth state');
+                        accessToken = token.access_token;
+                        document.getElementById('loginSection').style.display = 'none';
+                        document.getElementById('appContent').style.display = 'block';
+                        
+                        // Load initial data
+                        try {
+                            await loadLastOdometer();
+                        } catch (err) {
+                            console.error('Error loading last odometer:', err);
+                        }
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('Error checking token:', err);
+            }
+            
+            // If no token found, check if we should auto-sign-in
+            // For standalone mode, we might want to prompt for re-auth
+            console.log('No existing token found - user needs to sign in');
+        }
+        
         function handleAuthClick() {
             const clientId = document.getElementById('clientId').value.trim();
             const apiKey = document.getElementById('apiKey').value.trim();
@@ -832,6 +889,16 @@
                 }
                 
                 accessToken = resp.access_token;
+                
+                // Make sure gapi.client has the token (important for standalone mode)
+                try {
+                    if (gapi && gapi.client) {
+                        gapi.client.setToken({ access_token: accessToken });
+                    }
+                } catch (err) {
+                    console.error('Error setting token in gapi.client:', err);
+                }
+                
                 document.getElementById('loginSection').style.display = 'none';
                 document.getElementById('appContent').style.display = 'block';
                 showStatus('Signed in successfully!', 'success');
@@ -1023,15 +1090,22 @@
         }
         
         async function loadHistory() {
+            console.log('=== loadHistory called ===');
+            console.log('Standalone mode:', window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches);
+            console.log('gapiInited:', gapiInited, 'gisInited:', gisInited);
+            console.log('accessToken:', accessToken ? 'Set' : 'Not set');
+            
             // Wait for gapi to be initialized (important for home screen launches)
             const gapiReady = await waitForGapi();
             if (!gapiReady) {
+                console.log('GAPI not ready after waiting');
                 showStatus('App is still initializing. Please wait a moment and try again.', 'error');
                 return;
             }
             
             // Check if gapi is initialized
             if (!gapiInited || !gapi || !gapi.client) {
+                console.log('GAPI not initialized properly');
                 showStatus('Please wait for app to initialize, then try again', 'error');
                 // Try to initialize if not done
                 if (!gapiInited) {
@@ -1040,12 +1114,38 @@
                 return;
             }
             
-            // Check if user is authenticated
-            const token = gapi.client.getToken();
-            if (!token) {
-                showStatus('Please sign in first', 'error');
+            // Check if user is authenticated - check both token sources
+            let token = null;
+            try {
+                token = gapi.client.getToken();
+                console.log('GAPI token:', token ? 'Found' : 'Not found');
+            } catch (err) {
+                console.error('Error getting token:', err);
+            }
+            
+            // Also check accessToken variable
+            if (!token && accessToken) {
+                console.log('Setting token from accessToken variable');
+                // Try to set the token if we have accessToken but gapi doesn't have it
+                try {
+                    gapi.client.setToken({ access_token: accessToken });
+                    token = gapi.client.getToken();
+                    console.log('Token set successfully');
+                } catch (err) {
+                    console.error('Error setting token:', err);
+                }
+            }
+            
+            if (!token && !accessToken) {
+                console.log('No authentication found - showing login');
+                showStatus('Please sign in first. Tap "Sign in with Google" button.', 'error');
+                // Show login section if hidden
+                document.getElementById('loginSection').style.display = 'block';
+                document.getElementById('appContent').style.display = 'none';
                 return;
             }
+            
+            console.log('Authentication OK, proceeding to load history');
             
             showStatus('Loading history...', 'info');
             try {
@@ -2424,6 +2524,11 @@
             if (typeof google !== 'undefined') {
                 gisLoaded();
             }
+            
+            // Check for existing auth state after a short delay to allow initialization
+            setTimeout(function() {
+                checkAuthState();
+            }, 1000);
         });
         
         // Also try to initialize on DOMContentLoaded for faster startup
@@ -2434,6 +2539,11 @@
             if (typeof google !== 'undefined') {
                 gisLoaded();
             }
+            
+            // Check for existing auth state after initialization
+            setTimeout(function() {
+                checkAuthState();
+            }, 1500);
         });
     </script>
 </body>
