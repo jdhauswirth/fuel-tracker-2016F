@@ -552,9 +552,8 @@
                 
                 <form id="fuelForm">
                     <div class="form-group">
-                        <label for="date">Date</label>
+                        <label for="date" id="dateLabel">Date</label>
                         <input type="date" id="date" required>
-                        <p id="currentDateDisplay" style="margin-top: 5px; font-size: 14px; color: #666; font-style: italic;"></p>
                     </div>
                     
                     <div class="form-group">
@@ -736,9 +735,9 @@
             const dateString = year + '-' + month + '-' + day;
             document.getElementById('date').value = dateString;
             
-            // Update the current date display with day of week
-            const dateDisplay = document.getElementById('currentDateDisplay');
-            if (dateDisplay) {
+            // Update the date label with day of week
+            const dateLabel = document.getElementById('dateLabel');
+            if (dateLabel) {
                 const dateObj = new Date(year, month - 1, day);
                 const formattedDate = dateObj.toLocaleDateString('en-US', { 
                     weekday: 'long', 
@@ -746,7 +745,7 @@
                     month: 'short', 
                     day: 'numeric' 
                 });
-                dateDisplay.textContent = formattedDate;
+                dateLabel.textContent = 'Date (' + formattedDate + ')';
             }
         }
         
@@ -1038,15 +1037,20 @@
                     if (lastDate && lastOdometer) {
                         document.getElementById('lastFillInfo').style.display = 'block';
                         const dayOfWeek = getDayOfWeek(lastDate);
-                        // Format: "DayOfWeek, Date" or just the date if day of week not available
+                        // Format: "Date (DayOfWeek / X days ago)"
                         let dateWithDay;
-                        if (dayOfWeek) {
-                            dateWithDay = dayOfWeek + ', ' + lastDate;
+                        if (dayOfWeek && daysAgo) {
+                            // Extract the number of days from daysAgo string
+                            const daysMatch = daysAgo.match(/(\d+)/);
+                            const daysNum = daysMatch ? daysMatch[1] : '';
+                            dateWithDay = lastDate + ' (' + dayOfWeek + ' / ' + daysNum + ' days ago)';
+                        } else if (dayOfWeek) {
+                            dateWithDay = lastDate + ' (' + dayOfWeek + ')';
                         } else {
-                            dateWithDay = lastDate;
+                            dateWithDay = lastDate + daysAgo;
                         }
                         document.getElementById('lastFillDetails').innerHTML = 
-                            '📅 Date: ' + dateWithDay + daysAgo + '<br>🚗 Odometer (prior): ' + lastOdometer.toLocaleString() + ' miles';
+                            '📅 Date: ' + dateWithDay + '<br>🚗 Odometer (prior): ' + lastOdometer.toLocaleString() + ' miles';
                         showStatus('Last fill-up loaded successfully', 'success');
                     }
                     
@@ -1611,8 +1615,8 @@
         document.getElementById('date').addEventListener('change', function(e) {
             const dateString = e.target.value;
             if (dateString) {
-                const dateDisplay = document.getElementById('currentDateDisplay');
-                if (dateDisplay) {
+                const dateLabel = document.getElementById('dateLabel');
+                if (dateLabel) {
                     const dateObj = new Date(dateString);
                     const formattedDate = dateObj.toLocaleDateString('en-US', { 
                         weekday: 'long', 
@@ -1620,7 +1624,7 @@
                         month: 'short', 
                         day: 'numeric' 
                     });
-                    dateDisplay.textContent = formattedDate;
+                    dateLabel.textContent = 'Date (' + formattedDate + ')';
                 }
             }
         });
