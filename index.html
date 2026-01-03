@@ -23,6 +23,9 @@
     <!-- Canonical URL for PWA -->
     <link rel="canonical" href="https://jdhauswirth.github.io/fuel-tracker-2016F/">
     
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
     <title>Fuel Tracker - Forester</title>
     <style>
         * {
@@ -501,6 +504,17 @@
             padding-bottom: 8px;
             border-bottom: 2px solid #e0e0e0;
         }
+        
+        #priceTrendChart {
+            max-width: 100%;
+            height: 400px !important;
+        }
+        
+        @media (max-width: 600px) {
+            #priceTrendChart {
+                height: 300px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -542,6 +556,7 @@
                 <button class="tab active" onclick="showTab('log')">📝 Log Fuel</button>
                 <button class="tab" onclick="showTab('history')">📊 History</button>
                 <button class="tab" onclick="showTab('summary')">📈 Summary</button>
+                <button class="tab" onclick="showTab('trends')">📈 Price Trends</button>
             </div>
             
             <div id="logTab" class="tab-content active">
@@ -660,6 +675,35 @@
                     <p style="text-align: center; color: #999;">Click "Refresh Summary" to load statistics</p>
                 </div>
             </div>
+            
+            <div id="trendsTab" class="tab-content">
+                <div style="margin-bottom: 20px;">
+                    <button onclick="loadPriceTrends()">🔄 Load Price Trends</button>
+                </div>
+                <div style="margin-bottom: 15px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <div style="margin-bottom: 10px; font-weight: 600; color: #333;">Date Range Filter</div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <label for="trendStartDate" style="min-width: 80px; font-size: 14px;">Start Date:</label>
+                            <input type="date" id="trendStartDate" style="flex: 1; min-width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <label for="trendEndDate" style="min-width: 80px; font-size: 14px;">End Date:</label>
+                            <input type="date" id="trendEndDate" style="flex: 1; min-width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button onclick="applyDateFilter()" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #45A0C9 0%, #3578A5 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Apply Filter</button>
+                            <button onclick="resetDateFilter()" style="flex: 1; padding: 10px; background: #666; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Show All Time</button>
+                        </div>
+                    </div>
+                </div>
+                <div style="position: relative; height: 400px; margin-bottom: 20px;">
+                    <canvas id="priceTrendChart"></canvas>
+                </div>
+                <div id="trendsInfo" style="text-align: center; color: #999; font-size: 14px;">
+                    Click "Load Price Trends" to display the chart
+                </div>
+            </div>
         </div>
     </div>
 
@@ -759,6 +803,11 @@
                     // Wait a bit for initialization if needed, then load history
                     setTimeout(function() {
                         loadHistory();
+                    }, 100);
+                } else if (tabName === 'trends') {
+                    // Wait a bit for initialization if needed, then load trends
+                    setTimeout(function() {
+                        loadPriceTrends();
                     }, 100);
                 }
             }
@@ -1623,6 +1672,303 @@
                 showStatus('Error loading summary: ' + err.message, 'error');
                 document.getElementById('summaryContent').innerHTML = '<p style="text-align: center; color: #c62828;">Error loading summary data. Please try again.</p>';
             }
+        }
+        
+        let priceTrendChart = null;
+        let allPriceData = [];
+        
+        async function loadPriceTrends() {
+            // Wait for gapi to be initialized
+            const gapiReady = await waitForGapi();
+            if (!gapiReady) {
+                showStatus('App is still initializing. Please wait a moment and try again.', 'error');
+                return;
+            }
+            
+            // Check if gapi is initialized
+            if (!gapiInited || !gapi || !gapi.client) {
+                showStatus('Please wait for app to initialize, then try again', 'error');
+                if (!gapiInited) {
+                    await initializeGapiClient();
+                }
+                return;
+            }
+            
+            // Check if user is authenticated
+            const token = gapi.client.getToken();
+            if (!token) {
+                showStatus('Please sign in first', 'error');
+                return;
+            }
+            
+            showStatus('Loading price trends...', 'info');
+            try {
+                const spreadsheetId = localStorage.getItem('fuelTracker_spreadsheetId');
+                const sheetName = localStorage.getItem('fuelTracker_sheetName');
+                
+                if (!spreadsheetId || !sheetName) {
+                    showStatus('Please configure spreadsheet settings first', 'error');
+                    return;
+                }
+                
+                // Read columns B (Date) and G (Price/Gal)
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: sheetName + '!B:G',
+                });
+                
+                const values = response.result.values;
+                
+                if (!values || values.length < 3) {
+                    document.getElementById('trendsInfo').textContent = 'No data available to display';
+                    showStatus('No price data found', 'error');
+                    return;
+                }
+                
+                // Parse data: skip header rows (indices 0 and 1)
+                allPriceData = [];
+                for (let i = 2; i < values.length; i++) {
+                    const row = values[i];
+                    if (row && row.length > 5 && row[0] && row[5]) {
+                        const dateStr = String(row[0]).trim();
+                        const priceStr = String(row[5]).replace(/[\$,\s]/g, '');
+                        const price = parseFloat(priceStr);
+                        
+                        if (dateStr && !isNaN(price) && price > 0) {
+                            // Parse date - handle MM/DD/YYYY and YYYY-MM-DD formats
+                            let dateObj;
+                            if (dateStr.includes('/')) {
+                                const parts = dateStr.split('/');
+                                if (parts.length === 3) {
+                                    dateObj = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+                                }
+                            } else if (dateStr.includes('-')) {
+                                dateObj = new Date(dateStr);
+                            }
+                            
+                            if (dateObj && !isNaN(dateObj.getTime())) {
+                                allPriceData.push({
+                                    date: dateObj,
+                                    price: price,
+                                    dateStr: dateStr
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                // Sort by date
+                allPriceData.sort(function(a, b) {
+                    return a.date.getTime() - b.date.getTime();
+                });
+                
+                // Set default date range to all time
+                if (allPriceData.length > 0) {
+                    const firstDate = allPriceData[0].date;
+                    const lastDate = allPriceData[allPriceData.length - 1].date;
+                    
+                    // Set date inputs to all time range
+                    document.getElementById('trendStartDate').value = firstDate.toISOString().split('T')[0];
+                    document.getElementById('trendEndDate').value = lastDate.toISOString().split('T')[0];
+                }
+                
+                // Render chart with all data initially
+                renderPriceChart(allPriceData);
+                showStatus('Price trends loaded!', 'success');
+                
+            } catch (err) {
+                console.error('Error loading price trends:', err);
+                showStatus('Error loading price trends: ' + (err.message || 'Unknown error'), 'error');
+                document.getElementById('trendsInfo').textContent = 'Error loading data. Please try again.';
+            }
+        }
+        
+        function applyDateFilter() {
+            const startDateInput = document.getElementById('trendStartDate').value;
+            const endDateInput = document.getElementById('trendEndDate').value;
+            
+            if (!startDateInput || !endDateInput) {
+                showStatus('Please select both start and end dates', 'error');
+                return;
+            }
+            
+            const startDate = new Date(startDateInput);
+            const endDate = new Date(endDateInput);
+            endDate.setHours(23, 59, 59, 999); // Include full end date
+            
+            if (startDate > endDate) {
+                showStatus('Start date must be before end date', 'error');
+                return;
+            }
+            
+            // Filter data by date range
+            const filteredData = allPriceData.filter(function(item) {
+                return item.date >= startDate && item.date <= endDate;
+            });
+            
+            if (filteredData.length === 0) {
+                showStatus('No data found for selected date range', 'error');
+                return;
+            }
+            
+            renderPriceChart(filteredData);
+            document.getElementById('trendsInfo').textContent = 'Showing ' + filteredData.length + ' data points from ' + 
+                startDateInput + ' to ' + endDateInput;
+        }
+        
+        function resetDateFilter() {
+            if (allPriceData.length === 0) {
+                showStatus('Please load price trends first', 'error');
+                return;
+            }
+            
+            const firstDate = allPriceData[0].date;
+            const lastDate = allPriceData[allPriceData.length - 1].date;
+            
+            document.getElementById('trendStartDate').value = firstDate.toISOString().split('T')[0];
+            document.getElementById('trendEndDate').value = lastDate.toISOString().split('T')[0];
+            
+            renderPriceChart(allPriceData);
+            document.getElementById('trendsInfo').textContent = 'Showing all ' + allPriceData.length + ' data points (all time)';
+        }
+        
+        function renderPriceChart(data) {
+            if (!data || data.length === 0) {
+                document.getElementById('trendsInfo').textContent = 'No data to display';
+                return;
+            }
+            
+            const ctx = document.getElementById('priceTrendChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (priceTrendChart) {
+                priceTrendChart.destroy();
+            }
+            
+            // Prepare data for chart
+            const labels = data.map(function(item) {
+                return item.dateStr;
+            });
+            
+            const prices = data.map(function(item) {
+                return item.price;
+            });
+            
+            // Calculate average price for reference line
+            const avgPrice = prices.reduce(function(a, b) { return a + b; }, 0) / prices.length;
+            
+            // Create chart
+            priceTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Price per Gallon ($)',
+                            data: prices,
+                            borderColor: '#45A0C9',
+                            backgroundColor: 'rgba(69, 160, 201, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                            pointBackgroundColor: '#45A0C9',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        },
+                        {
+                            label: 'Average Price',
+                            data: new Array(prices.length).fill(avgPrice),
+                            borderColor: '#3578A5',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0,
+                            pointHoverRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        return 'Price: $' + context.parsed.y.toFixed(3);
+                                    } else {
+                                        return 'Average: $' + context.parsed.y.toFixed(3);
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date',
+                                font: {
+                                    size: 12,
+                                    weight: 'bold'
+                                }
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: {
+                                    size: 10
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Price per Gallon ($)',
+                                font: {
+                                    size: 12,
+                                    weight: 'bold'
+                                }
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toFixed(3);
+                                },
+                                font: {
+                                    size: 10
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            });
+            
+            document.getElementById('trendsInfo').textContent = 'Displaying ' + data.length + ' data points';
         }
         
         function formatNumber(value, decimals) {
