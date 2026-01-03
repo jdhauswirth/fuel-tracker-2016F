@@ -719,7 +719,10 @@
                 if (tabName === 'summary') {
                     loadSummary();
                 } else if (tabName === 'history') {
-                    loadHistory();
+                    // Wait a bit for initialization if needed, then load history
+                    setTimeout(function() {
+                        loadHistory();
+                    }, 100);
                 }
             }
         }
@@ -1020,10 +1023,39 @@
         }
         
         async function loadHistory() {
+            // Wait for gapi to be initialized (important for home screen launches)
+            const gapiReady = await waitForGapi();
+            if (!gapiReady) {
+                showStatus('App is still initializing. Please wait a moment and try again.', 'error');
+                return;
+            }
+            
+            // Check if gapi is initialized
+            if (!gapiInited || !gapi || !gapi.client) {
+                showStatus('Please wait for app to initialize, then try again', 'error');
+                // Try to initialize if not done
+                if (!gapiInited) {
+                    await initializeGapiClient();
+                }
+                return;
+            }
+            
+            // Check if user is authenticated
+            const token = gapi.client.getToken();
+            if (!token) {
+                showStatus('Please sign in first', 'error');
+                return;
+            }
+            
             showStatus('Loading history...', 'info');
             try {
                 const spreadsheetId = localStorage.getItem('fuelTracker_spreadsheetId');
                 const sheetName = localStorage.getItem('fuelTracker_sheetName');
+                
+                if (!spreadsheetId || !sheetName) {
+                    showStatus('Please configure spreadsheet settings first', 'error');
+                    return;
+                }
                 
                 const response = await gapi.client.sheets.spreadsheets.values.get({
                     spreadsheetId: spreadsheetId,
@@ -1112,15 +1144,54 @@
                 }
             } catch (err) {
                 console.error('Error loading history:', err);
-                showStatus('Error loading history', 'error');
+                let errorMessage = 'Error loading history';
+                if (err.message) {
+                    errorMessage += ': ' + err.message;
+                } else if (err.result && err.result.error) {
+                    errorMessage += ': ' + err.result.error.message;
+                }
+                showStatus(errorMessage, 'error');
+                
+                // If it's an auth error, suggest signing in again
+                if (err.status === 401 || (err.result && err.result.error && err.result.error.status === 'UNAUTHENTICATED')) {
+                    showStatus('Please sign in again', 'error');
+                }
             }
         }
         
         async function loadSummary() {
+            // Wait for gapi to be initialized (important for home screen launches)
+            const gapiReady = await waitForGapi();
+            if (!gapiReady) {
+                showStatus('App is still initializing. Please wait a moment and try again.', 'error');
+                return;
+            }
+            
+            // Check if gapi is initialized
+            if (!gapiInited || !gapi || !gapi.client) {
+                showStatus('Please wait for app to initialize, then try again', 'error');
+                if (!gapiInited) {
+                    await initializeGapiClient();
+                }
+                return;
+            }
+            
+            // Check if user is authenticated
+            const token = gapi.client.getToken();
+            if (!token) {
+                showStatus('Please sign in first', 'error');
+                return;
+            }
+            
             showStatus('Loading summary...', 'info');
             try {
                 const spreadsheetId = localStorage.getItem('fuelTracker_spreadsheetId');
                 const sheetName = localStorage.getItem('fuelTracker_sheetName');
+                
+                if (!spreadsheetId || !sheetName) {
+                    showStatus('Please configure spreadsheet settings first', 'error');
+                    return;
+                }
                 
                 // Read from V2:V18
                 const response = await gapi.client.sheets.spreadsheets.values.get({
@@ -2331,7 +2402,32 @@
             if (savedSheetName) document.getElementById('sheetName').value = savedSheetName;
         });
         
+        // Function to wait for gapi to be ready
+        async function waitForGapi() {
+            let attempts = 0;
+            const maxAttempts = 50; // 5 seconds max wait
+            
+            while (attempts < maxAttempts) {
+                if (typeof gapi !== 'undefined' && gapiInited && gapi.client) {
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+            }
+            return false;
+        }
+        
         window.addEventListener('load', function() {
+            if (typeof gapi !== 'undefined') {
+                gapiLoaded();
+            }
+            if (typeof google !== 'undefined') {
+                gisLoaded();
+            }
+        });
+        
+        // Also try to initialize on DOMContentLoaded for faster startup
+        document.addEventListener('DOMContentLoaded', function() {
             if (typeof gapi !== 'undefined') {
                 gapiLoaded();
             }
