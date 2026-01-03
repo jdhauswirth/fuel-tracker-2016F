@@ -734,19 +734,6 @@
             const day = String(today.getDate()).padStart(2, '0');
             const dateString = year + '-' + month + '-' + day;
             document.getElementById('date').value = dateString;
-            
-            // Update the date label with day of week
-            const dateLabel = document.getElementById('dateLabel');
-            if (dateLabel) {
-                const dateObj = new Date(year, month - 1, day);
-                const formattedDate = dateObj.toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
-                dateLabel.textContent = 'Date (' + formattedDate + ')';
-            }
         }
         
         setTodayDate();
@@ -1037,20 +1024,20 @@
                     if (lastDate && lastOdometer) {
                         document.getElementById('lastFillInfo').style.display = 'block';
                         const dayOfWeek = getDayOfWeek(lastDate);
-                        // Format: "Date (DayOfWeek / X days ago)"
-                        let dateWithDay;
+                        // Format: "Date: YYYY-MM-DD" on one line, "Day: DayOfWeek, X days ago" on next line
+                        let dayLine = '';
                         if (dayOfWeek && daysAgo) {
                             // Extract the number of days from daysAgo string
                             const daysMatch = daysAgo.match(/(\d+)/);
                             const daysNum = daysMatch ? daysMatch[1] : '';
-                            dateWithDay = lastDate + ' (' + dayOfWeek + ' / ' + daysNum + ' days ago)';
+                            dayLine = '<br>Day: ' + dayOfWeek + ', ' + daysNum + ' days ago';
                         } else if (dayOfWeek) {
-                            dateWithDay = lastDate + ' (' + dayOfWeek + ')';
-                        } else {
-                            dateWithDay = lastDate + daysAgo;
+                            dayLine = '<br>Day: ' + dayOfWeek;
+                        } else if (daysAgo) {
+                            dayLine = '<br>' + daysAgo.replace(/[()]/g, '');
                         }
                         document.getElementById('lastFillDetails').innerHTML = 
-                            '📅 Date: ' + dateWithDay + '<br>🚗 Odometer (prior): ' + lastOdometer.toLocaleString() + ' miles';
+                            '📅 Date: ' + lastDate + dayLine + '<br>🚗 Odometer (prior): ' + lastOdometer.toLocaleString() + ' miles';
                         showStatus('Last fill-up loaded successfully', 'success');
                     }
                     
@@ -1612,22 +1599,6 @@
             e.target.value = e.target.value.toUpperCase();
         });
         
-        document.getElementById('date').addEventListener('change', function(e) {
-            const dateString = e.target.value;
-            if (dateString) {
-                const dateLabel = document.getElementById('dateLabel');
-                if (dateLabel) {
-                    const dateObj = new Date(dateString);
-                    const formattedDate = dateObj.toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'short', 
-                        day: 'numeric' 
-                    });
-                    dateLabel.textContent = 'Date (' + formattedDate + ')';
-                }
-            }
-        });
         
         document.getElementById('receipt').addEventListener('change', function(e) {
             const file = e.target.files[0];
