@@ -2,7 +2,8 @@
   "name": "Fuel Tracker - 2016 Subaru Forester",
   "short_name": "Fuel Tracker",
   "description": "Track fuel consumption and expenses for your 2016 Subaru Forester",
-  "start_url": "/",
+  "start_url": "https://jdhauswirth.github.io/fuel-tracker-2016F/",
+  "scope": "https://jdhauswirth.github.io/fuel-tracker-2016F/",
   "display": "standalone",
   "background_color": "#45A0C9",
   "theme_color": "#45A0C9",
@@ -22,3 +23,4 @@
     }
   ]
 }
+
