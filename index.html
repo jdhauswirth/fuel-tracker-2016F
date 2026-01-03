@@ -61,14 +61,14 @@
         .vehicle-info {
             color: #333;
             margin-bottom: 5px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: normal;
         }
         
         .subtitle {
             color: #666;
             margin-bottom: 15px;
-            font-size: 16px;
+            font-size: 13px;
             font-weight: normal;
             margin-top: 0;
         }
@@ -643,12 +643,14 @@
             </div>
             
             <div id="historyTab" class="tab-content">
-                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <div style="margin-bottom: 20px;">
                     <button onclick="loadHistory()">🔄 Refresh History</button>
-                    <button onclick="formatAllRows()" style="background: linear-gradient(135deg, #5FA8D0 0%, #45A0C9 100%);">📐 Format All Rows</button>
                 </div>
                 <div id="historyList" class="history-list">
                     <p style="text-align: center; color: #999;">Click "Refresh History" to load your fuel stops</p>
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="formatAllRows()" style="background: linear-gradient(135deg, #5FA8D0 0%, #45A0C9 100%);">📐 Format All Rows</button>
                 </div>
             </div>
             
@@ -1030,11 +1032,11 @@
                             // Extract the number of days from daysAgo string
                             const daysMatch = daysAgo.match(/(\d+)/);
                             const daysNum = daysMatch ? daysMatch[1] : '';
-                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  Day:   ' + dayOfWeek + ', ' + daysNum + ' days ago';
+                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Day: ' + dayOfWeek + ', ' + daysNum + ' days ago';
                         } else if (dayOfWeek) {
-                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  Day:   ' + dayOfWeek;
+                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Day: ' + dayOfWeek;
                         } else if (daysAgo) {
-                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + daysAgo.replace(/[()]/g, '');
+                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + daysAgo.replace(/[()]/g, '');
                         }
                         document.getElementById('lastFillDetails').innerHTML = 
                             '📅 Date: ' + lastDate + dayLine + '<br>🚗 Odometer (prior): ' + lastOdometer.toLocaleString() + ' miles';
@@ -2513,6 +2515,26 @@
                         }
                     },
                     fields: 'userEnteredFormat.horizontalAlignment'
+                }
+            });
+            
+            // Column J (Location) - Center justified and bottom aligned
+            requests.push({
+                repeatCell: {
+                    range: {
+                        sheetId: sheetId,
+                        startRowIndex: startRowIndex,
+                        endRowIndex: endRowIndex,
+                        startColumnIndex: 9, // Column J
+                        endColumnIndex: 10
+                    },
+                    cell: {
+                        userEnteredFormat: {
+                            horizontalAlignment: 'CENTER',
+                            verticalAlignment: 'BOTTOM'
+                        }
+                    },
+                    fields: 'userEnteredFormat.horizontalAlignment,userEnteredFormat.verticalAlignment'
                 }
             });
             
