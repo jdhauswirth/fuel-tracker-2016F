@@ -1428,7 +1428,15 @@
                 let html = '';
                 
                 html += '<div class="summary-section">';
-                html += '<div class="summary-section-title">📊 Overall Statistics</div>';
+                html += '<div class="summary-section-title">📊 Overall Ownership Statistics</div>';
+                html += '<div class="summary-stat">';
+                html += '<div class="summary-stat-label">Years Since 2016 Subaru Forester Was Purchased (July 08, 2016)</div>';
+                html += '<div class="summary-stat-value">' + formatNumber(stats.yearsOwned) + ' years</div>';
+                html += '</div>';
+                html += '<div class="summary-stat">';
+                html += '<div class="summary-stat-label">Total # Days Subaru Forester Owned (since July 08, 2016)</div>';
+                html += '<div class="summary-stat-value">' + formatNumber(stats.totalDaysOwned, 0) + ' days</div>';
+                html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Miles Driven Since Owned</div>';
                 html += '<div class="summary-stat-value">' + formatNumber(stats.milesDriven) + '</div>';
@@ -1496,18 +1504,6 @@
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Total "Lifetime" Gas Cost/Mile</div>';
                 html += '<div class="summary-stat-value">$' + formatNumber(stats.totalLifetimeCostPerMile) + '</div>';
-                html += '</div>';
-                html += '</div>';
-                
-                html += '<div class="summary-section">';
-                html += '<div class="summary-section-title">📅 Ownership</div>';
-                html += '<div class="summary-stat">';
-                html += '<div class="summary-stat-label">Total # Days Subaru Forester Owned (since July 08, 2016)</div>';
-                html += '<div class="summary-stat-value">' + formatNumber(stats.totalDaysOwned, 0) + ' days</div>';
-                html += '</div>';
-                html += '<div class="summary-stat">';
-                html += '<div class="summary-stat-label">Years Since 2016 Subaru Forester Was Purchased (July 08, 2016)</div>';
-                html += '<div class="summary-stat-value">' + formatNumber(stats.yearsOwned) + ' years</div>';
                 html += '</div>';
                 html += '</div>';
                 
