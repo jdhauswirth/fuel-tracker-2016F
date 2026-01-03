@@ -1426,6 +1426,68 @@
                     totalLifetimeCostPerMile: values[17] ? values[17][0] : 'N/A' // V19 (was V18)
                 };
                 
+                // Find dates for min and max prices by searching through data rows
+                let minPriceDate = '';
+                let maxPriceDate = '';
+                
+                try {
+                    // Read columns B (Date) and G (Price/Gal) to find matching prices
+                    const dataResponse = await gapi.client.sheets.spreadsheets.values.get({
+                        spreadsheetId: spreadsheetId,
+                        range: sheetName + '!B:G',
+                    });
+                    
+                    const dataValues = dataResponse.result.values;
+                    
+                    if (dataValues && dataValues.length > 2) {
+                        // Parse the min and max price values (remove $ and commas, handle decimals)
+                        const minPriceValue = parseFloat(String(stats.lowestPricePerGal).replace(/[\$,\s]/g, ''));
+                        const maxPriceValue = parseFloat(String(stats.highestPricePerGal).replace(/[\$,\s]/g, ''));
+                        
+                        if (!isNaN(minPriceValue)) {
+                            // Search for first occurrence of min price in Column G (index 5)
+                            // Skip header rows (indices 0 and 1)
+                            for (let i = 2; i < dataValues.length; i++) {
+                                const row = dataValues[i];
+                                if (row && row.length > 5 && row[5]) {
+                                    const rowPrice = parseFloat(String(row[5]).replace(/[\$,\s]/g, ''));
+                                    if (!isNaN(rowPrice) && Math.abs(rowPrice - minPriceValue) < 0.001) {
+                                        // Found matching price, get date from Column B (index 0)
+                                        if (row[0]) {
+                                            minPriceDate = String(row[0]).trim();
+                                        }
+                                        break; // Use first occurrence
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (!isNaN(maxPriceValue)) {
+                            // Search for first occurrence of max price in Column G (index 5)
+                            for (let i = 2; i < dataValues.length; i++) {
+                                const row = dataValues[i];
+                                if (row && row.length > 5 && row[5]) {
+                                    const rowPrice = parseFloat(String(row[5]).replace(/[\$,\s]/g, ''));
+                                    if (!isNaN(rowPrice) && Math.abs(rowPrice - maxPriceValue) < 0.001) {
+                                        // Found matching price, get date from Column B (index 0)
+                                        if (row[0]) {
+                                            maxPriceDate = String(row[0]).trim();
+                                        }
+                                        break; // Use first occurrence
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error finding price dates:', err);
+                    // Continue without dates if search fails
+                }
+                
+                // Store dates in stats object
+                stats.minPriceDate = minPriceDate;
+                stats.maxPriceDate = maxPriceDate;
+                
                 let html = '';
                 
                 html += '<div class="summary-section">';
@@ -1496,11 +1558,19 @@
                 html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Lowest Price Per Gallon (since July 08, 2016)</div>';
-                html += '<div class="summary-stat-value">$' + formatNumber(stats.lowestPricePerGal) + '</div>';
+                let lowestPriceDisplay = '$' + formatNumber(stats.lowestPricePerGal);
+                if (stats.minPriceDate) {
+                    lowestPriceDisplay += ' (' + stats.minPriceDate + ')';
+                }
+                html += '<div class="summary-stat-value">' + lowestPriceDisplay + '</div>';
                 html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Highest Price Per Gallon (since July 08, 2016)</div>';
-                html += '<div class="summary-stat-value">$' + formatNumber(stats.highestPricePerGal) + '</div>';
+                let highestPriceDisplay = '$' + formatNumber(stats.highestPricePerGal);
+                if (stats.maxPriceDate) {
+                    highestPriceDisplay += ' (' + stats.maxPriceDate + ')';
+                }
+                html += '<div class="summary-stat-value">' + highestPriceDisplay + '</div>';
                 html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Total "Lifetime" Gas Cost</div>';
