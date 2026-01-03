@@ -1447,8 +1447,7 @@
                         console.log('Searching for min price:', minPriceValue, 'max price:', maxPriceValue);
                         
                         if (!isNaN(minPriceValue)) {
-                            // Search for first occurrence of min price in Column G (index 6, since B=0, C=1, D=2, E=3, F=4, G=5)
-                            // Actually, Column G is index 5 in 0-based (B=0, C=1, D=2, E=3, F=4, G=5)
+                            // Search for first occurrence of min price in Column G (index 5: B=0, C=1, D=2, E=3, F=4, G=5)
                             // Skip header rows (indices 0 and 1), start from index 2 (row 3 in sheet)
                             for (let i = 2; i < dataValues.length; i++) {
                                 const row = dataValues[i];
@@ -1462,7 +1461,7 @@
                                             // Found matching price, get date from Column B (index 0)
                                             if (row[0]) {
                                                 minPriceDate = String(row[0]).trim();
-                                                console.log('Found min price date at row index', i, 'date:', minPriceDate, 'price:', rowPrice);
+                                                console.log('Found min price date at row index', i, 'date:', minPriceDate, 'price:', rowPrice, 'searching for:', minPriceValue);
                                             }
                                             break; // Use first occurrence
                                         }
@@ -1482,7 +1481,7 @@
                                             if (priceDiff < 0.01) {
                                                 if (row[0]) {
                                                     minPriceDate = String(row[0]).trim();
-                                                    console.log('Found min price date (second pass) at row index', i, 'date:', minPriceDate, 'price:', rowPrice);
+                                                    console.log('Found min price date (second pass) at row index', i, 'date:', minPriceDate, 'price:', rowPrice, 'searching for:', minPriceValue);
                                                 }
                                                 break;
                                             }
@@ -1493,7 +1492,7 @@
                         }
                         
                         if (!isNaN(maxPriceValue)) {
-                            // Search for first occurrence of max price in Column G (index 5)
+                            // Search for first occurrence of max price in Column G (index 5: B=0, C=1, D=2, E=3, F=4, G=5)
                             for (let i = 2; i < dataValues.length; i++) {
                                 const row = dataValues[i];
                                 if (row && row.length > 5 && row[5]) {
@@ -1505,7 +1504,7 @@
                                             // Found matching price, get date from Column B (index 0)
                                             if (row[0]) {
                                                 maxPriceDate = String(row[0]).trim();
-                                                console.log('Found max price date at row index', i, 'date:', maxPriceDate, 'price:', rowPrice);
+                                                console.log('Found max price date at row index', i, 'date:', maxPriceDate, 'price:', rowPrice, 'searching for:', maxPriceValue);
                                             }
                                             break; // Use first occurrence
                                         }
