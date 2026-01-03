@@ -737,13 +737,13 @@
             document.getElementById('date').value = dateString;
             
             // Update the current date display with day of week
-            const dayOfWeek = getDayOfWeek(dateString);
             const dateDisplay = document.getElementById('currentDateDisplay');
             if (dateDisplay) {
-                const formattedDate = new Date(year, month - 1, day).toLocaleDateString('en-US', { 
+                const dateObj = new Date(year, month - 1, day);
+                const formattedDate = dateObj.toLocaleDateString('en-US', { 
                     weekday: 'long', 
                     year: 'numeric', 
-                    month: 'long', 
+                    month: 'short', 
                     day: 'numeric' 
                 });
                 dateDisplay.textContent = formattedDate;
@@ -1008,21 +1008,43 @@
                     lastOdometer = parseFloat(String(odometerValue).replace(/,/g, ''));
                     
                     let daysAgo = '';
+                    let lastDateObj = null;
                     if (lastDate) {
-                        const dateParts = lastDate.split('-');
-                        const lastDateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        lastDateObj.setHours(0, 0, 0, 0);
-                        const diffTime = today.getTime() - lastDateObj.getTime();
-                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                        daysAgo = ' (' + diffDays + ' days ago)';
+                        // Parse date - handle both MM/DD/YYYY and YYYY-MM-DD formats
+                        if (lastDate.includes('/')) {
+                            // MM/DD/YYYY format
+                            const parts = lastDate.split('/');
+                            if (parts.length === 3) {
+                                lastDateObj = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+                            }
+                        } else if (lastDate.includes('-')) {
+                            // YYYY-MM-DD format
+                            const parts = lastDate.split('-');
+                            if (parts.length === 3) {
+                                lastDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                            }
+                        }
+                        
+                        if (lastDateObj && !isNaN(lastDateObj.getTime())) {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            lastDateObj.setHours(0, 0, 0, 0);
+                            const diffTime = today.getTime() - lastDateObj.getTime();
+                            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                            daysAgo = ' (' + diffDays + ' days ago)';
+                        }
                     }
                     
                     if (lastDate && lastOdometer) {
                         document.getElementById('lastFillInfo').style.display = 'block';
                         const dayOfWeek = getDayOfWeek(lastDate);
-                        const dateWithDay = dayOfWeek ? lastDate + ' (' + dayOfWeek + ')' : lastDate;
+                        // Format: "DayOfWeek, Date" or just the date if day of week not available
+                        let dateWithDay;
+                        if (dayOfWeek) {
+                            dateWithDay = dayOfWeek + ', ' + lastDate;
+                        } else {
+                            dateWithDay = lastDate;
+                        }
                         document.getElementById('lastFillDetails').innerHTML = 
                             '📅 Date: ' + dateWithDay + daysAgo + '<br>🚗 Odometer (prior): ' + lastOdometer.toLocaleString() + ' miles';
                         showStatus('Last fill-up loaded successfully', 'success');
@@ -1589,14 +1611,13 @@
         document.getElementById('date').addEventListener('change', function(e) {
             const dateString = e.target.value;
             if (dateString) {
-                const dayOfWeek = getDayOfWeek(dateString);
                 const dateDisplay = document.getElementById('currentDateDisplay');
                 if (dateDisplay) {
                     const dateObj = new Date(dateString);
                     const formattedDate = dateObj.toLocaleDateString('en-US', { 
                         weekday: 'long', 
                         year: 'numeric', 
-                        month: 'long', 
+                        month: 'short', 
                         day: 'numeric' 
                     });
                     dateDisplay.textContent = formattedDate;
