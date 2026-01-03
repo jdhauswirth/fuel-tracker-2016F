@@ -1594,7 +1594,7 @@
                 html += '<div class="summary-stat-label">Lowest Price Per Gallon (since July 08, 2016)</div>';
                 let lowestPriceDisplay = '$' + formatNumber(stats.lowestPricePerGal);
                 if (stats.minPriceDate) {
-                    lowestPriceDisplay += ' (' + stats.minPriceDate + ')';
+                    lowestPriceDisplay += ' <span style="color: #888; font-size: 0.85em;">(' + stats.minPriceDate + ')</span>';
                 }
                 html += '<div class="summary-stat-value">' + lowestPriceDisplay + '</div>';
                 html += '</div>';
@@ -1602,7 +1602,7 @@
                 html += '<div class="summary-stat-label">Highest Price Per Gallon (since July 08, 2016)</div>';
                 let highestPriceDisplay = '$' + formatNumber(stats.highestPricePerGal);
                 if (stats.maxPriceDate) {
-                    highestPriceDisplay += ' (' + stats.maxPriceDate + ')';
+                    highestPriceDisplay += ' <span style="color: #888; font-size: 0.85em;">(' + stats.maxPriceDate + ')</span>';
                 }
                 html += '<div class="summary-stat-value">' + highestPriceDisplay + '</div>';
                 html += '</div>';
@@ -1612,7 +1612,7 @@
                 html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Total "Lifetime" Gas Cost/Mile</div>';
-                html += '<div class="summary-stat-value">$' + formatNumber(stats.totalLifetimeCostPerMile) + '</div>';
+                html += '<div class="summary-stat-value">$' + formatNumber(stats.totalLifetimeCostPerMile, 2) + '</div>';
                 html += '</div>';
                 html += '</div>';
                 
