@@ -508,7 +508,7 @@
         <div class="header">
             <h1>⛽ Mileage & Fuel Tracker:</h1>
             <p class="vehicle-info">2016 Subaru Forester</p>
-            <p class="vehicle-info">VIN: ending -WXYZ</p>
+            <p class="vehicle-info">VIN: ending -8488</p>
             <p class="subtitle">(Logs fuel stops to Google Sheet)</p>
         </div>
         
@@ -668,6 +668,7 @@
         let tokenClient;
         let accessToken = null;
         let lastOdometer = null;
+        let runningAvgMPG = 26.1; // Default fallback value
         let gapiInited = false;
         let gisInited = false;
         let driveFolder = null;
@@ -845,9 +846,10 @@
                         
                         // Load initial data
                         try {
+                            await loadRunningAvgMPG();
                             await loadLastOdometer();
                         } catch (err) {
-                            console.error('Error loading last odometer:', err);
+                            console.error('Error loading data:', err);
                         }
                         return;
                     }
@@ -903,6 +905,7 @@
                 document.getElementById('appContent').style.display = 'block';
                 showStatus('Signed in successfully!', 'success');
                 
+                await loadRunningAvgMPG();
                 await loadLastOdometer();
             };
             
@@ -1032,6 +1035,35 @@
             } catch (err) {
                 console.log('Could not load last odometer:', err);
                 showStatus('Could not load previous data.', 'info');
+            }
+        }
+        
+        async function loadRunningAvgMPG() {
+            try {
+                const spreadsheetId = localStorage.getItem('fuelTracker_spreadsheetId');
+                const sheetName = localStorage.getItem('fuelTracker_sheetName');
+                
+                if (!spreadsheetId || !sheetName) {
+                    return; // Can't load without credentials
+                }
+                
+                // Read from V8 (which is V2:V18 range, V8 is index 6)
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: sheetName + '!V8:V8',
+                });
+                
+                const values = response.result.values;
+                if (values && values.length > 0 && values[0] && values[0][0]) {
+                    const mpgValue = parseFloat(String(values[0][0]).replace(/[,\s]/g, ''));
+                    if (!isNaN(mpgValue) && mpgValue > 0) {
+                        runningAvgMPG = mpgValue;
+                        console.log('Loaded running average MPG:', runningAvgMPG);
+                    }
+                }
+            } catch (err) {
+                console.log('Could not load running average MPG, using default:', err);
+                // Keep the default value of 26.1
             }
         }
         
@@ -1482,7 +1514,7 @@
             if (newValue >= 0) {
                 document.getElementById('milesFill').value = newValue.toFixed(1);
                 const milesFill = newValue;
-                const expectedGallons = milesFill / 26.1;
+                const expectedGallons = milesFill / runningAvgMPG;
                 document.getElementById('gallons').value = expectedGallons.toFixed(3);
                 calculateMPG();
             }
@@ -1562,7 +1594,7 @@
         document.getElementById('milesFill').addEventListener('input', function(e) {
             const milesFill = parseFloat(e.target.value);
             if (milesFill > 0) {
-                const expectedGallons = milesFill / 26.1;
+                const expectedGallons = milesFill / runningAvgMPG;
                 document.getElementById('gallons').value = expectedGallons.toFixed(3);
                 calculateMPG();
             }
@@ -1586,7 +1618,7 @@
                 const milesFill = odometer - lastOdometer;
                 document.getElementById('milesFill').value = milesFill.toFixed(1);
                 
-                const expectedGallons = milesFill / 26.1;
+                const expectedGallons = milesFill / runningAvgMPG;
                 document.getElementById('gallons').value = expectedGallons.toFixed(3);
                 
                 const mpg = milesFill / expectedGallons;
