@@ -505,14 +505,24 @@
             border-bottom: 2px solid #e0e0e0;
         }
         
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        
         #priceTrendChart {
             max-width: 100%;
             height: 400px !important;
         }
         
         @media (max-width: 600px) {
+            .chart-container {
+                height: 450px;
+            }
+            
             #priceTrendChart {
-                height: 300px !important;
+                height: 450px !important;
             }
         }
     </style>
@@ -697,7 +707,13 @@
                         </div>
                     </div>
                 </div>
-                <div style="position: relative; height: 400px; margin-bottom: 20px;">
+                <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                        <input type="checkbox" id="showTrendline" checked onchange="toggleTrendline()" style="width: 18px; height: 18px; cursor: pointer;">
+                        <span>Show Trendline (Red)</span>
+                    </label>
+                </div>
+                <div class="chart-container">
                     <canvas id="priceTrendChart"></canvas>
                 </div>
                 <div id="trendsInfo" style="text-align: center; color: #999; font-size: 14px;">
@@ -1676,6 +1692,7 @@
         
         let priceTrendChart = null;
         let allPriceData = [];
+        let currentChartData = []; // Store current data being displayed
         
         async function loadPriceTrends() {
             // Wait for gapi to be initialized
@@ -1832,11 +1849,52 @@
             document.getElementById('trendsInfo').textContent = 'Showing all ' + allPriceData.length + ' data points (all time)';
         }
         
+        // Calculate linear regression (trendline) using least squares method
+        function calculateTrendline(data) {
+            if (!data || data.length < 2) return null;
+            
+            // Convert dates to numeric values (days since first date)
+            const firstDate = data[0].date.getTime();
+            const n = data.length;
+            
+            let sumX = 0;
+            let sumY = 0;
+            let sumXY = 0;
+            let sumXX = 0;
+            
+            for (let i = 0; i < n; i++) {
+                const x = (data[i].date.getTime() - firstDate) / (1000 * 60 * 60 * 24); // Days since first date
+                const y = data[i].price;
+                
+                sumX += x;
+                sumY += y;
+                sumXY += x * y;
+                sumXX += x * x;
+            }
+            
+            // Calculate slope (m) and intercept (b) for y = mx + b
+            const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            
+            // Calculate trendline values for each data point
+            const trendlineData = [];
+            for (let i = 0; i < n; i++) {
+                const x = (data[i].date.getTime() - firstDate) / (1000 * 60 * 60 * 24);
+                const y = slope * x + intercept;
+                trendlineData.push(y);
+            }
+            
+            return trendlineData;
+        }
+        
         function renderPriceChart(data) {
             if (!data || data.length === 0) {
                 document.getElementById('trendsInfo').textContent = 'No data to display';
                 return;
             }
+            
+            // Store current data for toggle functionality
+            currentChartData = data;
             
             const ctx = document.getElementById('priceTrendChart').getContext('2d');
             
@@ -1857,37 +1915,59 @@
             // Calculate average price for reference line
             const avgPrice = prices.reduce(function(a, b) { return a + b; }, 0) / prices.length;
             
+            // Calculate trendline
+            const trendlineData = calculateTrendline(data);
+            const showTrendline = document.getElementById('showTrendline').checked;
+            
+            // Build datasets array
+            const datasets = [
+                {
+                    label: 'Price per Gallon ($)',
+                    data: prices,
+                    borderColor: '#45A0C9',
+                    backgroundColor: 'rgba(69, 160, 201, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: '#45A0C9',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
+                },
+                {
+                    label: 'Average Price',
+                    data: new Array(prices.length).fill(avgPrice),
+                    borderColor: '#3578A5',
+                    borderWidth: 1,
+                    borderDash: [5, 5],
+                    fill: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 0
+                }
+            ];
+            
+            // Add trendline if enabled and data is available
+            if (showTrendline && trendlineData) {
+                datasets.push({
+                    label: 'Trendline',
+                    data: trendlineData,
+                    borderColor: '#dc3545',
+                    borderWidth: 2,
+                    borderDash: [3, 3],
+                    fill: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    tension: 0
+                });
+            }
+            
             // Create chart
             priceTrendChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
-                    datasets: [
-                        {
-                            label: 'Price per Gallon ($)',
-                            data: prices,
-                            borderColor: '#45A0C9',
-                            backgroundColor: 'rgba(69, 160, 201, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.1,
-                            pointRadius: 3,
-                            pointHoverRadius: 5,
-                            pointBackgroundColor: '#45A0C9',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2
-                        },
-                        {
-                            label: 'Average Price',
-                            data: new Array(prices.length).fill(avgPrice),
-                            borderColor: '#3578A5',
-                            borderWidth: 1,
-                            borderDash: [5, 5],
-                            fill: false,
-                            pointRadius: 0,
-                            pointHoverRadius: 0
-                        }
-                    ]
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
@@ -1911,8 +1991,10 @@
                                 label: function(context) {
                                     if (context.datasetIndex === 0) {
                                         return 'Price: $' + context.parsed.y.toFixed(3);
-                                    } else {
+                                    } else if (context.datasetIndex === 1) {
                                         return 'Average: $' + context.parsed.y.toFixed(3);
+                                    } else if (context.datasetIndex === 2) {
+                                        return 'Trendline: $' + context.parsed.y.toFixed(3);
                                     }
                                 }
                             }
@@ -1969,6 +2051,16 @@
             });
             
             document.getElementById('trendsInfo').textContent = 'Displaying ' + data.length + ' data points';
+        }
+        
+        function toggleTrendline() {
+            if (currentChartData.length === 0) {
+                showStatus('Please load price trends first', 'error');
+                return;
+            }
+            
+            // Re-render chart with updated trendline visibility
+            renderPriceChart(currentChartData);
         }
         
         function formatNumber(value, decimals) {
