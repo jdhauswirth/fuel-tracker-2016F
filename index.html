@@ -61,14 +61,14 @@
         .vehicle-info {
             color: #333;
             margin-bottom: 5px;
-            font-size: 13px;
+            font-size: 16px;
             font-weight: normal;
         }
         
         .subtitle {
             color: #666;
             margin-bottom: 15px;
-            font-size: 10pt;
+            font-size: 13px;
             font-weight: normal;
             margin-top: 0;
         }
@@ -1024,17 +1024,17 @@
                     if (lastDate && lastOdometer) {
                         document.getElementById('lastFillInfo').style.display = 'block';
                         const dayOfWeek = getDayOfWeek(lastDate);
-                        // Format: "Date: YYYY-MM-DD" on one line, "Day: DayOfWeek, X days ago" on next line
+                        // Format: "Date: YYYY-MM-DD" on one line, "Day: DayOfWeek, X days ago" on next line (indented)
                         let dayLine = '';
                         if (dayOfWeek && daysAgo) {
                             // Extract the number of days from daysAgo string
                             const daysMatch = daysAgo.match(/(\d+)/);
                             const daysNum = daysMatch ? daysMatch[1] : '';
-                            dayLine = '    <br>Day: ' + dayOfWeek + ', ' + daysNum + ' days ago';
+                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;Day: ' + dayOfWeek + ', ' + daysNum + ' days ago';
                         } else if (dayOfWeek) {
-                            dayLine = '    <br>Day: ' + dayOfWeek;
+                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;Day: ' + dayOfWeek;
                         } else if (daysAgo) {
-                            dayLine = '<br>' + daysAgo.replace(/[()]/g, '');
+                            dayLine = '<br>&nbsp;&nbsp;&nbsp;&nbsp;' + daysAgo.replace(/[()]/g, '');
                         }
                         document.getElementById('lastFillDetails').innerHTML = 
                             '📅 Date: ' + lastDate + dayLine + '<br>🚗 Odometer (prior): ' + lastOdometer.toLocaleString() + ' miles';
