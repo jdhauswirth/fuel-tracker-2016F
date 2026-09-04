@@ -1638,20 +1638,20 @@
                 html += '<div class="summary-stat-value">' + formatNumber(stats.vehicleRange, 0) + '</div>';
                 html += '</div>';
                 html += '<div class="summary-stat">';
+                html += '<div class="summary-stat-label">Lowest MPG per Tank Fillup (all time)</div>';
+                html += '<div class="summary-stat-value">' + formatNumber(stats.lowestMPG, 1) + '</div>';
+                html += '</div>';
+                html += '<div class="summary-stat">';
+                html += '<div class="summary-stat-label">Highest MPG per Tank Fillup (all time)</div>';
+                html += '<div class="summary-stat-value">' + formatNumber(stats.highestMPG, 1) + '</div>';
+                html += '</div>';
+                html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Total Gallons Used (since July 08, 2016)</div>';
                 html += '<div class="summary-stat-value">' + formatNumber(stats.totalGallons, 1) + '</div>';
                 html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Number of 55 Gallon Drums Consumed</div>';
                 html += '<div class="summary-stat-value">' + formatNumber(stats.num55GalDrums, 1) + '</div>';
-                html += '</div>';
-                html += '<div class="summary-stat">';
-                html += '<div class="summary-stat-label">Lowest MPG per Tank Fillup</div>';
-                html += '<div class="summary-stat-value">' + formatNumber(stats.lowestMPG, 1) + '</div>';
-                html += '</div>';
-                html += '<div class="summary-stat">';
-                html += '<div class="summary-stat-label">Highest MPG per Tank Fillup</div>';
-                html += '<div class="summary-stat-value">' + formatNumber(stats.highestMPG, 1) + '</div>';
                 html += '</div>';
                 html += '</div>';
                 
