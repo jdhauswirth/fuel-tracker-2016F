@@ -1455,17 +1455,17 @@
                     return;
                 }
                 
-                // Read from V2:V19 (expanded to include new V12 value)
+                // Read from V2:V21 (expanded to include Vehicle Fuel Capacity and Vehicle Range)
                 const response = await gapi.client.sheets.spreadsheets.values.get({
                     spreadsheetId: spreadsheetId,
-                    range: sheetName + '!V2:V19',
+                    range: sheetName + '!V2:V21',
                 });
                 
                 const values = response.result.values;
                 const summaryContent = document.getElementById('summaryContent');
                 
-                if (!values || values.length < 18) {
-                    summaryContent.innerHTML = '<p style="text-align: center; color: #999;">Summary data not available. Make sure cells V2-V19 contain data.</p>';
+                if (!values || values.length < 20) {
+                    summaryContent.innerHTML = '<p style="text-align: center; color: #999;">Summary data not available. Make sure cells V2-V21 contain data.</p>';
                     showStatus('Summary data not found', 'error');
                     return;
                 }
@@ -1481,14 +1481,16 @@
                     lowestMPG: values[7] ? values[7][0] : 'N/A',
                     highestMPG: values[8] ? values[8][0] : 'N/A',
                     avgCostPerGal: values[9] ? values[9][0] : 'N/A', // V11
-                    recentGasPriceAvgLast4: values[10] ? values[10][0] : 'N/A', // V12 - NEW
-                    lowestPricePerGal: values[11] ? values[11][0] : 'N/A', // V13 (was V12)
-                    highestPricePerGal: values[12] ? values[12][0] : 'N/A', // V14 (was V13)
-                    avgMilesPerDay: values[13] ? values[13][0] : 'N/A', // V15 (was V14)
-                    totalDaysOwned: values[14] ? values[14][0] : 'N/A', // V16 (was V15)
-                    yearsOwned: values[15] ? values[15][0] : 'N/A', // V17 (was V16)
-                    totalLifetimeCost: values[16] ? values[16][0] : 'N/A', // V18 (was V17)
-                    totalLifetimeCostPerMile: values[17] ? values[17][0] : 'N/A' // V19 (was V18)
+                    recentGasPriceAvgLast4: values[10] ? values[10][0] : 'N/A', // V12
+                    lowestPricePerGal: values[11] ? values[11][0] : 'N/A', // V13
+                    highestPricePerGal: values[12] ? values[12][0] : 'N/A', // V14
+                    avgMilesPerDay: values[13] ? values[13][0] : 'N/A', // V15
+                    totalDaysOwned: values[14] ? values[14][0] : 'N/A', // V16
+                    yearsOwned: values[15] ? values[15][0] : 'N/A', // V17
+                    totalLifetimeCost: values[16] ? values[16][0] : 'N/A', // V18
+                    totalLifetimeCostPerMile: values[17] ? values[17][0] : 'N/A', // V19
+                    vehicleFuelCapacity: values[18] ? values[18][0] : 'N/A', // V20 - NEW
+                    vehicleRange: values[19] ? values[19][0] : 'N/A' // V21 - NEW
                 };
                 
                 // Find dates for min and max prices by searching through data rows
@@ -1624,16 +1626,24 @@
                 html += '<div class="summary-section">';
                 html += '<div class="summary-section-title">⛽ Fuel Consumption</div>';
                 html += '<div class="summary-stat">';
+                html += '<div class="summary-stat-label">Vehicle Fuel Capacity (gal)</div>';
+                html += '<div class="summary-stat-value">' + formatNumber(stats.vehicleFuelCapacity, 1) + '</div>';
+                html += '</div>';
+                html += '<div class="summary-stat">';
+                html += '<div class="summary-stat-label">Running Average MPG</div>';
+                html += '<div class="summary-stat-value">' + formatNumber(stats.runningAvgMPG, 1) + '</div>';
+                html += '</div>';
+                html += '<div class="summary-stat">';
+                html += '<div class="summary-stat-label">Vehicle Range (miles)</div>';
+                html += '<div class="summary-stat-value">' + formatNumber(stats.vehicleRange, 0) + '</div>';
+                html += '</div>';
+                html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Total Gallons Used (since July 08, 2016)</div>';
                 html += '<div class="summary-stat-value">' + formatNumber(stats.totalGallons, 1) + '</div>';
                 html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Number of 55 Gallon Drums Consumed</div>';
                 html += '<div class="summary-stat-value">' + formatNumber(stats.num55GalDrums, 1) + '</div>';
-                html += '</div>';
-                html += '<div class="summary-stat">';
-                html += '<div class="summary-stat-label">Running Average MPG</div>';
-                html += '<div class="summary-stat-value">' + formatNumber(stats.runningAvgMPG, 1) + '</div>';
                 html += '</div>';
                 html += '<div class="summary-stat">';
                 html += '<div class="summary-stat-label">Lowest MPG per Tank Fillup</div>';
@@ -3209,4 +3219,3 @@
     </script>
 </body>
 </html>
-
